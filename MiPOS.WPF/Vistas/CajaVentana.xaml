@@ -1,0 +1,78 @@
+<Window x:Class="MiPOS.WPF.Vistas.CajaVentana"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:MiPOS.WPF.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:CajaViewModel}"
+        Title="MiPOS - Caja"
+        Height="650" Width="1000"
+        WindowStartupLocation="CenterScreen"
+        WindowState="Maximized"
+        FontSize="16">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Encabezado -->
+            <RowDefinition Height="Auto"/>
+            <!-- Campo de codigo -->
+            <RowDefinition Height="Auto"/>
+            <!-- Mensaje -->
+            <RowDefinition Height="*"/>
+            <!-- Carrito -->
+            <RowDefinition Height="Auto"/>
+            <!-- Total -->
+        </Grid.RowDefinitions>
+
+        <!-- Encabezado -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <TextBlock Text="MiPOS" FontSize="26" FontWeight="Bold"/>
+            <TextBlock Text="Caja 01" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+        </Grid>
+
+        <!-- Campo para escanear o tipear el código -->
+        <StackPanel Grid.Row="1">
+            <TextBlock Text="Código / Producto" Margin="0,0,0,4"/>
+            <TextBox x:Name="TxtCodigo"
+                     FontSize="22" Padding="8"
+                     Text="{Binding CodigoIngresado, UpdateSourceTrigger=PropertyChanged}">
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Enter" Command="{Binding AgregarPorCodigoCommand}"/>
+                </TextBox.InputBindings>
+            </TextBox>
+        </StackPanel>
+
+        <!-- Mensajes (producto no encontrado, errores) -->
+        <TextBlock Grid.Row="2" Text="{Binding Mensaje}"
+                   Foreground="Firebrick" FontWeight="SemiBold" Margin="0,8,0,0"/>
+
+        <!-- Carrito -->
+        <DataGrid Grid.Row="3" Margin="0,12"
+                  ItemsSource="{Binding Items}"
+                  SelectedItem="{Binding ItemSeleccionado}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserAddRows="False"
+                  HeadersVisibility="Column"
+                  Focusable="False">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Código"   Binding="{Binding CodigoBarras}" Width="150"/>
+                <DataGridTextColumn Header="Producto" Binding="{Binding Nombre}" Width="*"/>
+                <DataGridTextColumn Header="Cant."    Binding="{Binding Cantidad}" Width="80"/>
+                <DataGridTextColumn Header="Precio"   Binding="{Binding PrecioUnitario, StringFormat='$ {0:N2}'}" Width="140"/>
+                <DataGridTextColumn Header="Subtotal" Binding="{Binding Subtotal, StringFormat='$ {0:N2}'}" Width="150"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <!-- Totales -->
+        <Grid Grid.Row="4">
+            <TextBlock Text="{Binding CantidadArticulos, StringFormat='Artículos: {0}'}"
+                       VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding Total, StringFormat='TOTAL: $ {0:N2}'}"
+                       HorizontalAlignment="Right"
+                       FontSize="36" FontWeight="Bold"/>
+        </Grid>
+    </Grid>
+</Window>

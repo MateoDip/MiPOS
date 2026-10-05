@@ -2,5 +2,6 @@
   <Project Path="MiPOS.Datos/MiPOS.Datos.csproj" />
   <Project Path="MiPOS.Dominio/MiPOS.Dominio.csproj" />
   <Project Path="MiPOS.Negocio/MiPOS.Negocio.csproj" />
+  <Project Path="MiPOS.Pruebas/MiPOS.Pruebas.csproj" />
   <Project Path="MiPOS.WPF/MiPOS.WPF.csproj" />
 </Solution>
