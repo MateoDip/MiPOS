@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using MiPOS.Dominio.Entidades;
+using MiPOS.Negocio.Ventas;
 using MiPOS.WPF.ViewModels;
 using MiPOS.WPF.Vistas;
 
@@ -46,6 +47,17 @@ public class DialogoServicio
         var ventana = new BuscarProductoVentana(viewModel) { Owner = VentanaPrincipal() };
 
         return ventana.ShowDialog() == true ? viewModel.ProductoElegido : null;
+    }
+
+    // Abre la ventana de cobro. Devuelve la venta registrada, o null si el usuario volvió sin cobrar.
+    public Venta? Cobrar(Carrito carrito)
+    {
+        var viewModel = _proveedor.GetRequiredService<CobroViewModel>();
+        viewModel.Iniciar(carrito);
+
+        var ventana = new CobroVentana(viewModel) { Owner = VentanaPrincipal() };
+
+        return ventana.ShowDialog() == true ? viewModel.VentaRegistrada : null;
     }
 
     private static Window VentanaPrincipal() => Application.Current.MainWindow;

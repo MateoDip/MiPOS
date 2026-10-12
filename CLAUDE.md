@@ -52,6 +52,9 @@ Más adelante se agregarán `MiPOS.Hardware`, `MiPOS.Facturacion` y `MiPOS.Segur
 - **Cultura `es-AR`** configurada en `App.xaml.cs`. Precios con formato `'$ {0:N2}'`.
 - **Textos de la interfaz:** por ahora están escritos en el XAML en español. En la Fase 10 (multidioma) se migrarán a archivos de recursos. No migrarlos antes sin consultar.
 - **Migraciones:** nunca modificar una migración ya aplicada; crear una nueva con un nombre descriptivo en español.
+- **Diálogos:** los ViewModels nunca abren ventanas ni usan `MessageBox`; lo hacen a través de `MiPOS.WPF/Servicios/DialogoServicio`. Cada diálogo tiene su ViewModel con un evento `Cerrar(bool)` que la ventana convierte en `DialogResult`.
+- **Ventas:** `DetalleVenta` guarda una copia del nombre y del precio del producto al momento de vender. El medio que calcula vuelto se identifica con `MedioPago.EsEfectivo`, nunca por el nombre. Los errores de reglas de venta se lanzan como `VentaInvalidaException` (su mensaje se muestra al cajero).
+- **Montos ingresados por el cajero:** solo números con coma decimal y hasta 2 decimales; no se aceptan puntos (en `es-AR` "1500.50" se leería como 150050).
 
 ## Codificación de archivos
 
@@ -87,7 +90,7 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 
 ## Plan de fases
 
-1. POS básico — **en curso**
+1. POS básico — **terminada**
 2. Usuarios (Cajero, Administrador, permisos, autorización por contraseña)
 3. Impresión (ticket, impresora térmica)
 4. Control de caja
@@ -105,6 +108,6 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 - [x] 1.3 `ProductoServicio`: búsqueda por código y por nombre
 - [x] 1.4 Pantalla de caja MVVM: escaneo con Enter, carrito (suma cantidades si se repite el producto), total y cantidad de artículos
 - [x] 1.5 Operación del carrito: buscar por nombre (F1), eliminar (F4), cambiar cantidad (F5), cancelar venta (ESC), navegación del carrito con flechas
-- [ ] 1.6 Cobro: medio de pago, vuelto en efectivo y registro de la venta (entidades `Venta`, `DetalleVenta`, `MedioPago`)
+- [x] 1.6 Cobro: medio de pago, vuelto en efectivo y registro de la venta (entidades `Venta`, `DetalleVenta`, `MedioPago`)
 
 Actualizar esta lista al completar cada paso.

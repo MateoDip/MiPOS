@@ -39,11 +39,13 @@ public partial class App : Application
             opciones.UseSqlServer(configuracion.GetConnectionString("MiPOS")));
 
         servicios.AddTransient<ProductoServicio>();
+        servicios.AddTransient<VentaServicio>();
         servicios.AddTransient<DialogoServicio>();
         servicios.AddTransient<CajaViewModel>();
         servicios.AddTransient<CajaVentana>();
         servicios.AddTransient<BuscarProductoViewModel>();
         servicios.AddTransient<CantidadViewModel>();
+        servicios.AddTransient<CobroViewModel>();
 
         var proveedor = servicios.BuildServiceProvider();
 

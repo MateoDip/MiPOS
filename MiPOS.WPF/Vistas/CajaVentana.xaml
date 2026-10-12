@@ -15,6 +15,7 @@
     <!-- Atajos de teclado de la caja (funcionan aunque el cursor esté en el campo de código) -->
     <Window.InputBindings>
         <KeyBinding Key="F1"     Command="{Binding BuscarProductoCommand}"/>
+        <KeyBinding Key="F3"     Command="{Binding CobrarCommand}"/>
         <KeyBinding Key="F4"     Command="{Binding EliminarCommand}"/>
         <KeyBinding Key="F5"     Command="{Binding CambiarCantidadCommand}"/>
         <KeyBinding Key="Escape" Command="{Binding CancelarVentaCommand}"/>
@@ -57,9 +58,13 @@
             </TextBox>
         </StackPanel>
 
-        <!-- Mensajes (producto no encontrado, errores) -->
-        <TextBlock Grid.Row="2" Text="{Binding Mensaje}"
-                   Foreground="Firebrick" FontWeight="SemiBold" Margin="0,8,0,0"/>
+        <!-- Mensajes: en rojo los errores, en verde las confirmaciones (venta registrada) -->
+        <StackPanel Grid.Row="2" Margin="0,8,0,0">
+            <TextBlock Text="{Binding Mensaje}"
+                       Foreground="Firebrick" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding MensajeExito}"
+                       Foreground="ForestGreen" FontWeight="SemiBold"/>
+        </StackPanel>
 
         <!-- Carrito -->
         <DataGrid x:Name="GrillaCarrito" Grid.Row="3" Margin="0,12"
@@ -88,6 +93,7 @@
                     <Setter Property="Margin" Value="0,0,8,0"/>
                 </Style>
             </StackPanel.Resources>
+            <Button Content="F3  Cobrar"    Command="{Binding CobrarCommand}"/>
             <Button Content="F4  Eliminar"  Command="{Binding EliminarCommand}"/>
             <Button Content="F5  Cantidad"  Command="{Binding CambiarCantidadCommand}"/>
             <Button Content="ESC  Cancelar" Command="{Binding CancelarVentaCommand}"/>

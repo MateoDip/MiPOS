@@ -10,6 +10,9 @@ public class MiPOSDbContext : DbContext
     // Cada DbSet es una tabla
     public DbSet<Categoria> Categorias => Set<Categoria>();
     public DbSet<Producto> Productos => Set<Producto>();
+    public DbSet<MedioPago> MediosPago => Set<MedioPago>();
+    public DbSet<Venta> Ventas => Set<Venta>();
+    public DbSet<DetalleVenta> DetallesVenta => Set<DetalleVenta>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

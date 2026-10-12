@@ -37,6 +37,10 @@ public partial class CajaViewModel : ObservableObject
     [ObservableProperty]
     private string mensaje = string.Empty;
 
+    // Mensaje en verde (por ejemplo, "Venta registrada"). Se borra al agregar el próximo producto.
+    [ObservableProperty]
+    private string mensajeExito = string.Empty;
+
     // Cuando cambia el producto seleccionado, se re-evalúa si se puede eliminar o cambiar cantidad
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(EliminarCommand))]
@@ -67,6 +71,7 @@ public partial class CajaViewModel : ObservableObject
 
             ItemSeleccionado = _carrito.Agregar(producto);
             Mensaje = string.Empty;
+            MensajeExito = string.Empty;
             ActualizarTotales();
         }
         catch (Exception)
@@ -85,6 +90,38 @@ public partial class CajaViewModel : ObservableObject
         {
             ItemSeleccionado = _carrito.Agregar(producto);
             Mensaje = string.Empty;
+            MensajeExito = string.Empty;
+            ActualizarTotales();
+        }
+
+        AccionTerminada?.Invoke();
+    }
+
+    // F3: cobrar la venta
+    [RelayCommand(CanExecute = nameof(HayProductos))]
+    private void Cobrar()
+    {
+        // Si todavía se está buscando un producto escaneado, el total podría cambiar
+        // con la ventana de cobro abierta. Se pide esperar.
+        if (AgregarPorCodigoCommand.IsRunning)
+        {
+            Mensaje = "Espere a que termine de cargar el último producto.";
+            AccionTerminada?.Invoke();
+            return;
+        }
+
+        // La ventana de cobro registra la venta. Si se cierra sin cobrar, el carrito queda igual.
+        var venta = _dialogos.Cobrar(_carrito);
+
+        if (venta is not null)
+        {
+            _carrito.Vaciar();
+            ItemSeleccionado = null;
+            CodigoIngresado = string.Empty;
+            Mensaje = string.Empty;
+            MensajeExito = venta.Vuelto is decimal vuelto
+                ? $"Venta N° {venta.Id} registrada. Vuelto: $ {vuelto:N2}"
+                : $"Venta N° {venta.Id} registrada.";
             ActualizarTotales();
         }
 
@@ -198,5 +235,6 @@ public partial class CajaViewModel : ObservableObject
         OnPropertyChanged(nameof(Total));
         OnPropertyChanged(nameof(CantidadArticulos));
         CancelarVentaCommand.NotifyCanExecuteChanged();
+        CobrarCommand.NotifyCanExecuteChanged();
     }
 }

@@ -1,0 +1,69 @@
+<Window x:Class="MiPOS.WPF.Vistas.CobroVentana"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:MiPOS.WPF.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:CobroViewModel}"
+        Title="Cobrar"
+        Width="520" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        FontSize="16">
+
+    <Window.Resources>
+        <!-- Convierte true/false en visible/oculto (viene incluido en WPF) -->
+        <BooleanToVisibilityConverter x:Key="VisibleSiEsTrue"/>
+    </Window.Resources>
+
+    <!-- Atajos a nivel de ventana: funcionan aunque "Paga con" esté oculto -->
+    <Window.InputBindings>
+        <KeyBinding Key="Up"     Command="{Binding SubirCommand}"/>
+        <KeyBinding Key="Down"   Command="{Binding BajarCommand}"/>
+        <KeyBinding Key="Enter"  Command="{Binding ConfirmarCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding CancelarCommand}"/>
+    </Window.InputBindings>
+
+    <StackPanel Margin="16">
+        <TextBlock Text="{Binding Total, StringFormat='TOTAL: $ {0:N2}'}"
+                   FontSize="36" FontWeight="Bold" HorizontalAlignment="Right"/>
+
+        <TextBlock Text="Medio de pago" Margin="0,12,0,4"/>
+        <ListBox ItemsSource="{Binding MediosPago}"
+                 SelectedItem="{Binding MedioSeleccionado}"
+                 DisplayMemberPath="Nombre"
+                 Focusable="False">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="Focusable" Value="False"/>
+                    <Setter Property="Padding" Value="6,4"/>
+                </Style>
+            </ListBox.ItemContainerStyle>
+        </ListBox>
+
+        <!-- Solo para efectivo -->
+        <StackPanel Visibility="{Binding EsEfectivo, Converter={StaticResource VisibleSiEsTrue}}">
+            <TextBlock Text="Paga con" Margin="0,12,0,4"/>
+            <TextBox x:Name="TxtPagaCon"
+                     FontSize="22" Padding="8"
+                     Text="{Binding PagaCon, UpdateSourceTrigger=PropertyChanged}">
+                <!-- Se repiten acá porque el campo de texto usa las flechas para sí mismo -->
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Up"    Command="{Binding SubirCommand}"/>
+                    <KeyBinding Key="Down"  Command="{Binding BajarCommand}"/>
+                    <KeyBinding Key="Enter" Command="{Binding ConfirmarCommand}"/>
+                </TextBox.InputBindings>
+            </TextBox>
+            <TextBlock Text="{Binding TextoVuelto}"
+                       FontSize="26" FontWeight="Bold" Margin="0,8,0,0"/>
+        </StackPanel>
+
+        <TextBlock Text="{Binding Mensaje}" TextWrapping="Wrap"
+                   Foreground="Firebrick" FontWeight="SemiBold" Margin="0,12,0,0"/>
+
+        <TextBlock Text="↑ ↓: medio de pago     Enter: cobrar     Esc: volver"
+                   Foreground="Gray" FontSize="13" Margin="0,8,0,0"/>
+    </StackPanel>
+</Window>
