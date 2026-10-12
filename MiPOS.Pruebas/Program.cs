@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using MiPOS.Datos;
 using MiPOS.Negocio.Servicios;
+using MiPOS.Dominio.Entidades;
+using MiPOS.Seguridad;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -40,3 +42,25 @@ foreach (var texto in new[] { "ARROZ", "co", "x" })
     foreach (var p in resultados)
         Console.WriteLine($"{p.CodigoBarras}  {p.Nombre}  ${p.Precio:N2}");
 }
+
+// --- Prueba 5: hash de contraseñas ---
+Console.WriteLine("\n=== Hash de contraseñas ===");
+var reloj = System.Diagnostics.Stopwatch.StartNew();
+var hash1 = HashContrasena.Generar("Secreta123");
+Console.WriteLine($"Tiempo para generar un hash: {reloj.ElapsedMilliseconds} ms");
+var hash2 = HashContrasena.Generar("Secreta123");
+
+Console.WriteLine($"Hash: {hash1}");
+Console.WriteLine($"Misma contraseña, hashes distintos (por la sal): {(hash1 != hash2 ? "OK" : "ERROR")}");
+Console.WriteLine($"Contraseña correcta se acepta: {(HashContrasena.Verificar("Secreta123", hash1) ? "OK" : "ERROR")}");
+Console.WriteLine($"Contraseña incorrecta se rechaza: {(!HashContrasena.Verificar("secreta123", hash1) ? "OK" : "ERROR")}");
+Console.WriteLine($"Contraseña vacía se rechaza: {(!HashContrasena.Verificar("", hash1) ? "OK" : "ERROR")}");
+Console.WriteLine($"Hash dañado se rechaza: {(!HashContrasena.Verificar("Secreta123", "PBKDF2$SHA256$600000$$") ? "OK" : "ERROR")}");
+Console.WriteLine($"Hash con otro formato se rechaza: {(!HashContrasena.Verificar("Secreta123", "Secreta123") ? "OK" : "ERROR")}");
+
+// --- Prueba 6: permisos por rol ---
+Console.WriteLine("\n=== Permisos ===");
+Console.WriteLine($"Administrador puede gestionar usuarios: {(Permisos.Tiene(Rol.Administrador, Permiso.GestionarUsuarios) ? "OK" : "ERROR")}");
+Console.WriteLine($"Administrador puede aplicar descuento: {(Permisos.Tiene(Rol.Administrador, Permiso.AplicarDescuento) ? "OK" : "ERROR")}");
+Console.WriteLine($"Cajero NO puede gestionar usuarios: {(!Permisos.Tiene(Rol.Cajero, Permiso.GestionarUsuarios) ? "OK" : "ERROR")}");
+Console.WriteLine($"Cajero NO puede aplicar descuento: {(!Permisos.Tiene(Rol.Cajero, Permiso.AplicarDescuento) ? "OK" : "ERROR")}");

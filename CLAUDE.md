@@ -31,9 +31,10 @@ MiPOS es un sistema POS (punto de venta) para comercios minoristas, principalmen
 | `MiPOS.Datos` | `MiPOSDbContext`, configuraciones Fluent API (`Configuraciones/`), migraciones, `MiPOSDbContextFactory` (solo para `dotnet ef`) | Dominio |
 | `MiPOS.Negocio` | Servicios (`Servicios/`) y lógica de venta (`Ventas/`: `Carrito`, `ItemCarrito`) | Dominio, Datos |
 | `MiPOS.WPF` | `Vistas/`, `ViewModels/`, `App.xaml.cs` (inyección de dependencias), `appsettings.json` | Negocio, Dominio |
-| `MiPOS.Pruebas` | Consola para pruebas manuales contra la base real | Negocio, Datos |
+| `MiPOS.Seguridad` | Hash de contraseñas (`HashContrasena`), permisos por rol (`Permiso`, `Permisos`) | Dominio |
+| `MiPOS.Pruebas` | Consola para pruebas manuales contra la base real | Negocio, Datos, Seguridad |
 
-Más adelante se agregarán `MiPOS.Hardware`, `MiPOS.Facturacion` y `MiPOS.Seguridad` siguiendo el mismo criterio.
+Más adelante se agregarán `MiPOS.Hardware` y `MiPOS.Facturacion` siguiendo el mismo criterio.
 
 ## Decisiones ya tomadas
 
@@ -54,6 +55,10 @@ Más adelante se agregarán `MiPOS.Hardware`, `MiPOS.Facturacion` y `MiPOS.Segur
 - **Migraciones:** nunca modificar una migración ya aplicada; crear una nueva con un nombre descriptivo en español.
 - **Diálogos:** los ViewModels nunca abren ventanas ni usan `MessageBox`; lo hacen a través de `MiPOS.WPF/Servicios/DialogoServicio`. Cada diálogo tiene su ViewModel con un evento `Cerrar(bool)` que la ventana convierte en `DialogResult`.
 - **Ventas:** `DetalleVenta` guarda una copia del nombre y del precio del producto al momento de vender. El medio que calcula vuelto se identifica con `MedioPago.EsEfectivo`, nunca por el nombre. Los errores de reglas de venta se lanzan como `VentaInvalidaException` (su mensaje se muestra al cajero).
+- **Contraseñas:** nunca se guardan ni se registran en texto; solo el hash PBKDF2-SHA256 (600.000 iteraciones, sal aleatoria de 16 bytes por usuario), con formato `PBKDF2$SHA256$<iteraciones>$<sal>$<hash>`. La comparación se hace con `CryptographicOperations.FixedTimeEquals`. El cálculo se ejecuta fuera del hilo de la pantalla.
+- **Roles fijos en código:** `Rol` (Cajero, Administrador) es un enum en `MiPOS.Dominio`; qué permisos tiene cada rol se define en `MiPOS.Seguridad/Permisos`. No hay tabla de permisos configurables.
+- **Los permisos se verifican en `MiPOS.Negocio`**, no solo ocultando botones en la pantalla.
+- **Usuarios:** no se borran, se desactivan. Nunca puede quedar el sistema sin un administrador activo. No hay usuario ni contraseña por defecto: si no existen usuarios, el primer arranque pide crear el administrador. 5 intentos fallidos seguidos bloquean el inicio de sesión de ese usuario por 30 segundos.
 - **Montos ingresados por el cajero:** solo números con coma decimal y hasta 2 decimales; no se aceptan puntos (en `es-AR` "1500.50" se leería como 150050).
 
 ## Codificación de archivos
@@ -80,7 +85,7 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 
 **Flujo de venta:** caja → escanear/buscar → agregar al carrito → cambiar cantidad/eliminar → total → descuento opcional (requiere contraseña de administrador) → cobrar → medio de pago → comprobante (ticket fiscal o interno) → registrar venta → descontar stock si el módulo está activo → nueva venta.
 
-**Atajos de teclado de la caja:** F1 buscar, F2 producto, F3 cobrar, F4 eliminar, F5 cambiar cantidad, F6 descuento, ESC cancelar.
+**Atajos de teclado de la caja:** F1 buscar, F2 producto, F3 cobrar, F4 eliminar, F5 cambiar cantidad, F6 descuento, F9 usuarios (solo administrador), F10 cambiar mi contraseña, F12 cerrar sesión, ESC cancelar.
 
 **Medios de pago:** efectivo, débito, crédito, Mercado Pago, QR, transferencia. Un único medio por venta. En efectivo se calcula el vuelto.
 
@@ -91,7 +96,7 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 ## Plan de fases
 
 1. POS básico — **terminada**
-2. Usuarios (Cajero, Administrador, permisos, autorización por contraseña)
+2. Usuarios (Cajero, Administrador, permisos, autorización por contraseña) — **en curso**
 3. Impresión (ticket, impresora térmica)
 4. Control de caja
 5. Stock y compras
@@ -101,7 +106,16 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 9. Licenciamiento
 10. Multidioma (español y chino)
 
-## Estado actual de la Fase 1
+## Estado de la Fase 2
+
+- [ ] 2.1 Proyecto `MiPOS.Seguridad`: hash de contraseñas (PBKDF2) y permisos por rol
+- [ ] 2.2 Entidad `Usuario` y `UsuarioServicio` (inicio de sesión con bloqueo, alta, edición, contraseñas, activar/desactivar)
+- [ ] 2.3 Inicio de sesión: creación del primer administrador, `Sesion`, usuario en la caja, cerrar sesión (F12), usuario obligatorio en cada venta
+- [ ] 2.4 Gestión de usuarios (F9, solo administrador) y cambiar mi contraseña (F10)
+- [ ] 2.5 Autorización por contraseña de administrador (diálogo reutilizable)
+- [ ] 2.6 Descuento (F6) con autorización de administrador
+
+## Estado de la Fase 1 (terminada)
 
 - [x] 1.1 Entidades `Categoria` y `Producto`
 - [x] 1.2 Base de datos con EF Core, configuraciones y datos iniciales (3 categorías, 3 productos)

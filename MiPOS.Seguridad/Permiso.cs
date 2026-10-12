@@ -1,0 +1,23 @@
+﻿namespace MiPOS.Seguridad;
+
+/// <summary>
+/// Acciones que requieren un permiso especial.
+/// Las tareas de venta (escanear, buscar, cambiar cantidad, eliminar, cancelar, cobrar)
+/// las puede hacer cualquier usuario y no figuran acá.
+/// Algunos permisos son para pantallas de fases futuras.
+/// </summary>
+public enum Permiso
+{
+    AplicarDescuento,
+    GestionarUsuarios,
+    GestionarProductos,
+    ModificarPrecios,
+    GestionarStock,
+    GestionarCompras,
+    GestionarCajas,
+    ConfigurarHardware,
+    ConfigurarFacturacion,
+    ConfigurarSistema,
+    CambiarIdioma,
+    GestionarLicencia
+}
