@@ -29,9 +29,9 @@ MiPOS es un sistema POS (punto de venta) para comercios minoristas, principalmen
 |---|---|---|
 | `MiPOS.Dominio` | Entidades (`Entidades/`) | Nada |
 | `MiPOS.Datos` | `MiPOSDbContext`, configuraciones Fluent API (`Configuraciones/`), migraciones, `MiPOSDbContextFactory` (solo para `dotnet ef`) | Dominio |
-| `MiPOS.Negocio` | Servicios (`Servicios/`) y lógica de venta (`Ventas/`: `Carrito`, `ItemCarrito`) | Dominio, Datos |
-| `MiPOS.WPF` | `Vistas/`, `ViewModels/`, `App.xaml.cs` (inyección de dependencias), `appsettings.json` | Negocio, Dominio |
-| `MiPOS.Seguridad` | Hash de contraseñas (`HashContrasena`), permisos por rol (`Permiso`, `Permisos`) | Dominio |
+| `MiPOS.Negocio` | Servicios (`Servicios/`: `ProductoServicio`, `VentaServicio`, `UsuarioServicio`), lógica de venta (`Ventas/`: `Carrito`, `ItemCarrito`, `Cobro`) y de usuarios (`Usuarios/`) | Dominio, Datos, Seguridad |
+| `MiPOS.WPF` | `Vistas/`, `ViewModels/`, `Servicios/` (`DialogoServicio`, `LectorNumeros`), `App.xaml.cs` (inyección de dependencias e inicio de sesión), `appsettings.json` | Negocio, Dominio, Seguridad |
+| `MiPOS.Seguridad` | Hash de contraseñas (`HashContrasena`), permisos por rol (`Permiso`, `Permisos`), usuario conectado (`Sesion`) | Dominio |
 | `MiPOS.Pruebas` | Consola para pruebas manuales contra la base real | Negocio, Datos, Seguridad |
 
 Más adelante se agregarán `MiPOS.Hardware` y `MiPOS.Facturacion` siguiendo el mismo criterio.
@@ -46,15 +46,17 @@ Más adelante se agregarán `MiPOS.Hardware` y `MiPOS.Facturacion` siguiendo el 
 - **Acceso a datos:** los servicios reciben `IDbContextFactory<MiPOSDbContext>` y crean un contexto por operación (`await using var contexto = await _fabrica.CreateDbContextAsync();`). Lecturas con `AsNoTracking()`.
 - **Configuración de tablas con Fluent API** en `MiPOS.Datos/Configuraciones/`, una clase `IEntityTypeConfiguration<T>` por entidad. Nada de data annotations en las entidades.
 - **`MiPOS.Negocio` usa directamente el `DbContext` de `MiPOS.Datos`** (simplificación aceptada; no introducir repositorios ni interfaces extra sin consultar).
-- **MVVM estricto:** los ViewModels heredan de `ObservableObject`, son `partial` y usan `[ObservableProperty]` (sobre campos privados) y `[RelayCommand]`. El code-behind de las ventanas solo asigna el `DataContext` y maneja el foco. **Nunca lógica de negocio en las ventanas.**
+- **MVVM estricto:** los ViewModels heredan de `ObservableObject`, son `partial` y usan `[ObservableProperty]` (sobre campos privados) y `[RelayCommand]`. El code-behind de las ventanas solo asigna el `DataContext` y maneja el foco. **Nunca lógica de negocio en las ventanas.** Excepciones aceptadas: pasar la contraseña de un `PasswordBox` al ViewModel en `PasswordChanged` (WPF no permite Binding en `PasswordBox`), y detectar F10 en `PreviewKeyDown` (Windows la usa para el menú y no llega a un `KeyBinding`).
 - **Reglas de negocio en `MiPOS.Negocio`**, no en los ViewModels. El ViewModel solo coordina entre la pantalla y el negocio.
-- **Inyección de dependencias** registrada en `App.xaml.cs`. Ventanas, ViewModels y servicios como `Transient`.
+- **Inyección de dependencias** registrada en `App.xaml.cs`. Ventanas, ViewModels y servicios como `Transient`. Única excepción: `Sesion` es `Singleton` (una sola sesión para toda la aplicación).
 - **Cadena de conexión** en `MiPOS.WPF/appsettings.json` (`ConnectionStrings:MiPOS`), copiada a la salida con `CopyToOutputDirectory`.
 - **Cultura `es-AR`** configurada en `App.xaml.cs`. Precios con formato `'$ {0:N2}'`.
 - **Textos de la interfaz:** por ahora están escritos en el XAML en español. En la Fase 10 (multidioma) se migrarán a archivos de recursos. No migrarlos antes sin consultar.
 - **Migraciones:** nunca modificar una migración ya aplicada; crear una nueva con un nombre descriptivo en español.
-- **Diálogos:** los ViewModels nunca abren ventanas ni usan `MessageBox`; lo hacen a través de `MiPOS.WPF/Servicios/DialogoServicio`. Cada diálogo tiene su ViewModel con un evento `Cerrar(bool)` que la ventana convierte en `DialogResult`.
-- **Ventas:** `DetalleVenta` guarda una copia del nombre y del precio del producto al momento de vender. El medio que calcula vuelto se identifica con `MedioPago.EsEfectivo`, nunca por el nombre. Los errores de reglas de venta se lanzan como `VentaInvalidaException` (su mensaje se muestra al cajero).
+- **Diálogos:** los ViewModels nunca abren ventanas ni usan `MessageBox`; lo hacen a través de `MiPOS.WPF/Servicios/DialogoServicio`. Cada diálogo tiene su ViewModel con un evento `Cerrar(bool)` que la ventana convierte en `DialogResult`. El dueño (`Owner`) de cada diálogo es la ventana activa.
+- **Ventas:** `DetalleVenta` guarda una copia del nombre y del precio del producto al momento de vender. El medio que calcula vuelto se identifica con `MedioPago.EsEfectivo`, nunca por el nombre. Los errores de reglas de venta se lanzan como `VentaInvalidaException` (su mensaje se muestra al cajero). Toda venta guarda el `UsuarioId` de quien la hizo. El descuento es un porcentaje sobre el total (`Carrito.AplicarDescuento`); la venta guarda `Subtotal`, `DescuentoPorcentaje`, `Descuento` y `DescuentoAutorizadoPorId`, y `VentaServicio` vuelve a verificar en la base que quien autorizó tenga el permiso.
+- **Errores de usuarios y permisos:** `UsuarioInvalidoException` (reglas de usuarios) y `PermisoDenegadoException` (falta de permiso). Sus mensajes se muestran tal cual en pantalla.
+- **Autorización:** si el usuario conectado tiene el permiso, autoriza él mismo; si no, se abre `AutorizacionVentana` y se registra quién autorizó. Quitar un descuento no requiere autorización.
 - **Contraseñas:** nunca se guardan ni se registran en texto; solo el hash PBKDF2-SHA256 (600.000 iteraciones, sal aleatoria de 16 bytes por usuario), con formato `PBKDF2$SHA256$<iteraciones>$<sal>$<hash>`. La comparación se hace con `CryptographicOperations.FixedTimeEquals`. El cálculo se ejecuta fuera del hilo de la pantalla.
 - **Roles fijos en código:** `Rol` (Cajero, Administrador) es un enum en `MiPOS.Dominio`; qué permisos tiene cada rol se define en `MiPOS.Seguridad/Permisos`. No hay tabla de permisos configurables.
 - **Los permisos se verifican en `MiPOS.Negocio`**, no solo ocultando botones en la pantalla.
@@ -96,7 +98,7 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 ## Plan de fases
 
 1. POS básico — **terminada**
-2. Usuarios (Cajero, Administrador, permisos, autorización por contraseña) — **en curso**
+2. Usuarios (Cajero, Administrador, permisos, autorización por contraseña) — **terminada**
 3. Impresión (ticket, impresora térmica)
 4. Control de caja
 5. Stock y compras
@@ -106,14 +108,14 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 9. Licenciamiento
 10. Multidioma (español y chino)
 
-## Estado de la Fase 2
+## Estado de la Fase 2 (terminada)
 
-- [ ] 2.1 Proyecto `MiPOS.Seguridad`: hash de contraseñas (PBKDF2) y permisos por rol
-- [ ] 2.2 Entidad `Usuario` y `UsuarioServicio` (inicio de sesión con bloqueo, alta, edición, contraseñas, activar/desactivar)
-- [ ] 2.3 Inicio de sesión: creación del primer administrador, `Sesion`, usuario en la caja, cerrar sesión (F12), usuario obligatorio en cada venta
-- [ ] 2.4 Gestión de usuarios (F9, solo administrador) y cambiar mi contraseña (F10)
-- [ ] 2.5 Autorización por contraseña de administrador (diálogo reutilizable)
-- [ ] 2.6 Descuento (F6) con autorización de administrador
+- [x] 2.1 Proyecto `MiPOS.Seguridad`: hash de contraseñas (PBKDF2) y permisos por rol
+- [x] 2.2 Entidad `Usuario` y `UsuarioServicio` (inicio de sesión con bloqueo, alta, edición, contraseñas, activar/desactivar)
+- [x] 2.3 Inicio de sesión: creación del primer administrador, `Sesion`, usuario en la caja, cerrar sesión (F12), usuario obligatorio en cada venta
+- [x] 2.4 Gestión de usuarios (F9, solo administrador) y cambiar mi contraseña (F10)
+- [x] 2.5 Autorización por contraseña de administrador (diálogo reutilizable)
+- [x] 2.6 Descuento (F6) con autorización de administrador
 
 ## Estado de la Fase 1 (terminada)
 

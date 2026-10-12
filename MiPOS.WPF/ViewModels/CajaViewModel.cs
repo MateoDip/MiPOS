@@ -1,8 +1,10 @@
 ﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using MiPOS.Dominio.Entidades;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Negocio.Ventas;
+using MiPOS.Seguridad;
 using MiPOS.WPF.Servicios;
 
 namespace MiPOS.WPF.ViewModels;
@@ -12,20 +14,39 @@ public partial class CajaViewModel : ObservableObject
 {
     private const string MensajeCantidadInvalida = "Cantidad inválida: ingrese un número entero mayor a cero.";
 
+    private const string MensajeDescuentoInvalido = "Descuento inválido: ingrese un porcentaje mayor a 0 y hasta 100, con coma para los decimales (ej: 10 o 12,5).";
+
     private readonly ProductoServicio _productoServicio;
+    private readonly UsuarioServicio _usuarioServicio;
     private readonly DialogoServicio _dialogos;
+    private readonly Sesion _sesion;
     private readonly Carrito _carrito = new();
 
-    public CajaViewModel(ProductoServicio productoServicio, DialogoServicio dialogos)
+    public CajaViewModel(ProductoServicio productoServicio, UsuarioServicio usuarioServicio,
+                         DialogoServicio dialogos, Sesion sesion)
     {
         _productoServicio = productoServicio;
+        _usuarioServicio = usuarioServicio;
         _dialogos = dialogos;
+        _sesion = sesion;
     }
 
     // Avisa a la ventana que terminó una acción, para que devuelva el cursor al campo de código
     public event Action? AccionTerminada;
 
+    // Avisa a la ventana que se cerró la sesión, para que se cierre y vuelva el inicio de sesión
+    public event Action? SesionCerrada;
+
+    // Ej: "Administrador: Juan Pérez"
+    public string UsuarioTexto => _sesion.UsuarioActual is { } usuario
+        ? $"{usuario.Rol}: {usuario.NombreCompleto}"
+        : string.Empty;
+
     public ReadOnlyObservableCollection<ItemCarrito> Items => _carrito.Items;
+    public decimal Subtotal => _carrito.Subtotal;
+    public decimal Descuento => _carrito.Descuento;
+    public bool TieneDescuento => _carrito.TieneDescuento;
+    public string TextoDescuento => $"Descuento {_carrito.DescuentoPorcentaje:0.##}%: - $ {_carrito.Descuento:N2}";
     public decimal Total => _carrito.Total;
     public int CantidadArticulos => _carrito.CantidadArticulos;
 
@@ -204,6 +225,96 @@ public partial class CajaViewModel : ObservableObject
         AccionTerminada?.Invoke();
     }
 
+    // F6: aplicar, cambiar o quitar un descuento sobre el total
+    [RelayCommand(CanExecute = nameof(HayProductos))]
+    private void AplicarDescuento()
+    {
+        var texto = _dialogos.PedirDescuento(_carrito.DescuentoPorcentaje);
+
+        // null significa que se canceló con Esc: no se cambia nada
+        if (texto is not null)
+        {
+            if (!LectorNumeros.IntentarLeerDecimal(texto, out var porcentaje))
+            {
+                Mensaje = MensajeDescuentoInvalido;
+            }
+            else if (porcentaje == 0)
+            {
+                // Quitar el descuento no necesita autorización (el cliente paga más, no menos)
+                _carrito.QuitarDescuento();
+                Mensaje = string.Empty;
+                ActualizarTotales();
+            }
+            else if (!Carrito.EsPorcentajeDescuentoValido(porcentaje))
+            {
+                // Se valida antes de pedir la contraseña, para no hacer escribirla en vano
+                Mensaje = MensajeDescuentoInvalido;
+            }
+            else
+            {
+                var motivo = $"Descuento del {porcentaje:0.##}% sobre $ {_carrito.Subtotal:N2}";
+                var autorizante = ObtenerAutorizacion(Permiso.AplicarDescuento, motivo);
+
+                if (autorizante is not null)
+                {
+                    _carrito.AplicarDescuento(porcentaje, autorizante.Id);
+                    Mensaje = string.Empty;
+                    ActualizarTotales();
+                }
+            }
+        }
+
+        AccionTerminada?.Invoke();
+    }
+
+    // Si el usuario conectado tiene el permiso, autoriza él mismo;
+    // si no, se pide usuario y contraseña de alguien que lo tenga. null = no se autorizó.
+    private Usuario? ObtenerAutorizacion(Permiso permiso, string motivo)
+        => _sesion.Tiene(permiso)
+            ? _sesion.UsuarioActual
+            : _dialogos.PedirAutorizacion(permiso, motivo);
+
+    // F9: gestionar usuarios (solo quien tiene el permiso)
+    [RelayCommand(CanExecute = nameof(PuedeGestionarUsuarios))]
+    private void GestionarUsuarios()
+    {
+        _dialogos.GestionarUsuarios();
+
+        // Si el administrador cambió su propio nombre, se actualiza el encabezado
+        OnPropertyChanged(nameof(UsuarioTexto));
+        AccionTerminada?.Invoke();
+    }
+
+    private bool PuedeGestionarUsuarios() => _sesion.Tiene(Permiso.GestionarUsuarios);
+
+    // F10: cambiar mi contraseña
+    [RelayCommand]
+    private void CambiarMiContrasena()
+    {
+        if (_dialogos.CambiarMiContrasena())
+        {
+            Mensaje = string.Empty;
+            MensajeExito = "Contraseña cambiada.";
+        }
+
+        AccionTerminada?.Invoke();
+    }
+
+    // F12: cerrar sesión (solo sin una venta en curso)
+    [RelayCommand]
+    private void CerrarSesion()
+    {
+        if (!_carrito.EstaVacio)
+        {
+            Mensaje = "Termine o cancele la venta antes de cerrar sesión.";
+            AccionTerminada?.Invoke();
+            return;
+        }
+
+        _usuarioServicio.CerrarSesion();
+        SesionCerrada?.Invoke();
+    }
+
     // Flecha arriba en el campo de código: seleccionar el producto anterior del carrito
     [RelayCommand]
     private void SeleccionarAnterior() => MoverSeleccion(-1);
@@ -232,9 +343,14 @@ public partial class CajaViewModel : ObservableObject
 
     private void ActualizarTotales()
     {
+        OnPropertyChanged(nameof(Subtotal));
+        OnPropertyChanged(nameof(Descuento));
+        OnPropertyChanged(nameof(TieneDescuento));
+        OnPropertyChanged(nameof(TextoDescuento));
         OnPropertyChanged(nameof(Total));
         OnPropertyChanged(nameof(CantidadArticulos));
         CancelarVentaCommand.NotifyCanExecuteChanged();
         CobrarCommand.NotifyCanExecuteChanged();
+        AplicarDescuentoCommand.NotifyCanExecuteChanged();
     }
 }

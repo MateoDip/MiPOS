@@ -1,26 +1,26 @@
-<Window x:Class="MiPOS.WPF.Vistas.CantidadVentana"
+<Window x:Class="MiPOS.WPF.Vistas.IngresarValorVentana"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:MiPOS.WPF.ViewModels"
         mc:Ignorable="d"
-        d:DataContext="{d:DesignInstance Type=vm:CantidadViewModel}"
-        Title="Cambiar cantidad"
-        Width="360" SizeToContent="Height"
+        d:DataContext="{d:DesignInstance Type=vm:IngresarValorViewModel}"
+        Title="{Binding Titulo}"
+        Width="400" SizeToContent="Height"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         FontSize="16">
 
-    <!-- Esc cierra sin cambiar la cantidad -->
+    <!-- Esc cierra sin cambiar nada -->
     <Window.InputBindings>
         <KeyBinding Key="Escape" Command="{Binding CancelarCommand}"/>
     </Window.InputBindings>
 
     <StackPanel Margin="16">
-        <TextBlock Text="Nueva cantidad:" Margin="0,0,0,4"/>
-        <TextBox x:Name="TxtCantidad"
+        <TextBlock Text="{Binding Etiqueta}" TextWrapping="Wrap" Margin="0,0,0,4"/>
+        <TextBox x:Name="TxtValor"
                  FontSize="22" Padding="8"
                  Text="{Binding Texto, UpdateSourceTrigger=PropertyChanged}">
             <TextBox.InputBindings>

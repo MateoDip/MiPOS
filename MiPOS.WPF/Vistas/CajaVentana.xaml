@@ -18,8 +18,16 @@
         <KeyBinding Key="F3"     Command="{Binding CobrarCommand}"/>
         <KeyBinding Key="F4"     Command="{Binding EliminarCommand}"/>
         <KeyBinding Key="F5"     Command="{Binding CambiarCantidadCommand}"/>
+        <KeyBinding Key="F6"     Command="{Binding AplicarDescuentoCommand}"/>
+        <KeyBinding Key="F9"     Command="{Binding GestionarUsuariosCommand}"/>
+        <!-- F10 no se puede poner acá: Windows la usa para el menú. Se maneja en CajaVentana.xaml.cs -->
+        <KeyBinding Key="F12"    Command="{Binding CerrarSesionCommand}"/>
         <KeyBinding Key="Escape" Command="{Binding CancelarVentaCommand}"/>
     </Window.InputBindings>
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="VisibleSiEsTrue"/>
+    </Window.Resources>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
@@ -40,7 +48,11 @@
         <!-- Encabezado -->
         <Grid Grid.Row="0" Margin="0,0,0,12">
             <TextBlock Text="MiPOS" FontSize="26" FontWeight="Bold"/>
-            <TextBlock Text="Caja 01" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <TextBlock Text="Caja 01"/>
+                <TextBlock Text="  ·  " Foreground="Gray"/>
+                <TextBlock Text="{Binding UsuarioTexto}" FontWeight="SemiBold"/>
+            </StackPanel>
         </Grid>
 
         <!-- Campo para escanear o tipear el código -->
@@ -85,27 +97,41 @@
         </DataGrid>
 
         <!-- Botones de operación. Focusable="False": al hacer clic, el cursor sigue en el campo de código -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,0,0,12">
-            <StackPanel.Resources>
+        <!-- A la izquierda, las de la venta; a la derecha, las de usuario -->
+        <DockPanel Grid.Row="4" Margin="0,0,0,12" LastChildFill="False">
+            <DockPanel.Resources>
                 <Style TargetType="Button">
                     <Setter Property="Focusable" Value="False"/>
                     <Setter Property="Padding" Value="16,8"/>
                     <Setter Property="Margin" Value="0,0,8,0"/>
                 </Style>
-            </StackPanel.Resources>
-            <Button Content="F3  Cobrar"    Command="{Binding CobrarCommand}"/>
-            <Button Content="F4  Eliminar"  Command="{Binding EliminarCommand}"/>
-            <Button Content="F5  Cantidad"  Command="{Binding CambiarCantidadCommand}"/>
-            <Button Content="ESC  Cancelar" Command="{Binding CancelarVentaCommand}"/>
-        </StackPanel>
+            </DockPanel.Resources>
+            <Button DockPanel.Dock="Left"  Content="F3  Cobrar"        Command="{Binding CobrarCommand}"/>
+            <Button DockPanel.Dock="Left"  Content="F4  Eliminar"      Command="{Binding EliminarCommand}"/>
+            <Button DockPanel.Dock="Left"  Content="F5  Cantidad"      Command="{Binding CambiarCantidadCommand}"/>
+            <Button DockPanel.Dock="Left"  Content="F6  Descuento"     Command="{Binding AplicarDescuentoCommand}"/>
+            <Button DockPanel.Dock="Left"  Content="ESC  Cancelar"     Command="{Binding CancelarVentaCommand}"/>
+            <Button DockPanel.Dock="Right" Content="F12  Cerrar sesión" Command="{Binding CerrarSesionCommand}" Margin="0"/>
+            <Button DockPanel.Dock="Right" Content="F10  Contraseña"   Command="{Binding CambiarMiContrasenaCommand}"/>
+            <Button DockPanel.Dock="Right" Content="F9  Usuarios"      Command="{Binding GestionarUsuariosCommand}"/>
+        </DockPanel>
 
         <!-- Totales -->
         <Grid Grid.Row="5">
             <TextBlock Text="{Binding CantidadArticulos, StringFormat='Artículos: {0}'}"
-                       VerticalAlignment="Center"/>
-            <TextBlock Text="{Binding Total, StringFormat='TOTAL: $ {0:N2}'}"
-                       HorizontalAlignment="Right"
-                       FontSize="36" FontWeight="Bold"/>
+                       VerticalAlignment="Bottom" Margin="0,0,0,8"/>
+            <StackPanel HorizontalAlignment="Right">
+                <!-- Subtotal y descuento: solo si hay descuento -->
+                <StackPanel Visibility="{Binding TieneDescuento, Converter={StaticResource VisibleSiEsTrue}}">
+                    <TextBlock Text="{Binding Subtotal, StringFormat='Subtotal: $ {0:N2}'}"
+                               HorizontalAlignment="Right" FontSize="20"/>
+                    <TextBlock Text="{Binding TextoDescuento}"
+                               HorizontalAlignment="Right" FontSize="20" Foreground="ForestGreen"/>
+                </StackPanel>
+                <TextBlock Text="{Binding Total, StringFormat='TOTAL: $ {0:N2}'}"
+                           HorizontalAlignment="Right"
+                           FontSize="36" FontWeight="Bold"/>
+            </StackPanel>
         </Grid>
     </Grid>
 </Window>

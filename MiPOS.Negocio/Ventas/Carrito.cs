@@ -15,11 +15,31 @@ public class Carrito
     // De "solo lectura" hacia afuera: para modificar hay que usar los métodos del Carrito
     public ReadOnlyObservableCollection<ItemCarrito> Items { get; }
 
-    public decimal Total => _items.Sum(i => i.Subtotal);
+    // Suma de los productos, antes del descuento
+    public decimal Subtotal => _items.Sum(i => i.Subtotal);
+
+    // Descuento sobre el total de la venta, en porcentaje (0 = sin descuento)
+    public decimal DescuentoPorcentaje { get; private set; }
+
+    // Quién autorizó el descuento (un usuario con permiso para aplicarlo)
+    public int? DescuentoAutorizadoPorId { get; private set; }
+
+    public bool TieneDescuento => DescuentoPorcentaje > 0;
+
+    // Monto descontado, redondeado a centavos. Se recalcula si cambian los productos.
+    public decimal Descuento =>
+        Math.Round(Subtotal * DescuentoPorcentaje / 100m, 2, MidpointRounding.AwayFromZero);
+
+    // Lo que paga el cliente
+    public decimal Total => Subtotal - Descuento;
 
     public int CantidadArticulos => _items.Sum(i => i.Cantidad);
 
     public bool EstaVacio => _items.Count == 0;
+
+    // Mayor a 0, hasta 100, con hasta 2 decimales
+    public static bool EsPorcentajeDescuentoValido(decimal porcentaje)
+        => porcentaje > 0 && porcentaje <= 100 && decimal.Round(porcentaje, 2) == porcentaje;
 
     public ItemCarrito Agregar(Producto producto, int cantidad = 1)
     {
@@ -43,6 +63,10 @@ public class Carrito
     {
         if (!_items.Remove(item))
             throw new InvalidOperationException("El producto no está en el carrito.");
+
+        // Si no quedan productos, el descuento ya no tiene sentido
+        if (EstaVacio)
+            QuitarDescuento();
     }
 
     public void CambiarCantidad(ItemCarrito item, int nuevaCantidad)
@@ -56,5 +80,28 @@ public class Carrito
         item.Cantidad = nuevaCantidad;
     }
 
-    public void Vaciar() => _items.Clear();
+    // El permiso del que autoriza lo controla VentaServicio al registrar la venta
+    public void AplicarDescuento(decimal porcentaje, int autorizadoPorId)
+    {
+        if (EstaVacio)
+            throw new InvalidOperationException("No se puede aplicar un descuento sin productos.");
+
+        if (!EsPorcentajeDescuentoValido(porcentaje))
+            throw new ArgumentOutOfRangeException(nameof(porcentaje), "El descuento debe ser mayor a 0 y hasta 100%, con hasta 2 decimales.");
+
+        DescuentoPorcentaje = porcentaje;
+        DescuentoAutorizadoPorId = autorizadoPorId;
+    }
+
+    public void QuitarDescuento()
+    {
+        DescuentoPorcentaje = 0;
+        DescuentoAutorizadoPorId = null;
+    }
+
+    public void Vaciar()
+    {
+        _items.Clear();
+        QuitarDescuento();
+    }
 }

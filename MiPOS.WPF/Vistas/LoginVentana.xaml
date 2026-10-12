@@ -1,0 +1,53 @@
+<Window x:Class="MiPOS.WPF.Vistas.LoginVentana"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:MiPOS.WPF.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:LoginViewModel}"
+        Title="MiPOS - Iniciar sesión"
+        Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        FontSize="16">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="VisibleSiEsTrue"/>
+    </Window.Resources>
+
+    <Window.InputBindings>
+        <KeyBinding Key="Enter" Command="{Binding IngresarCommand}"/>
+    </Window.InputBindings>
+
+    <StackPanel Margin="24">
+        <TextBlock Text="MiPOS" FontSize="26" FontWeight="Bold"/>
+        <TextBlock Text="{Binding Titulo}" FontSize="18" Margin="0,4,0,16"/>
+
+        <TextBlock Text="Usuario" Margin="0,0,0,4"/>
+        <TextBox x:Name="TxtUsuario" Padding="6"
+                 Text="{Binding NombreUsuario, UpdateSourceTrigger=PropertyChanged}"/>
+
+        <!-- Solo en el primer arranque -->
+        <StackPanel Visibility="{Binding EsPrimerArranque, Converter={StaticResource VisibleSiEsTrue}}">
+            <TextBlock Text="Nombre completo" Margin="0,12,0,4"/>
+            <TextBox Padding="6"
+                     Text="{Binding NombreCompleto, UpdateSourceTrigger=PropertyChanged}"/>
+        </StackPanel>
+
+        <TextBlock Text="Contraseña" Margin="0,12,0,4"/>
+        <PasswordBox x:Name="PwdContrasena" Padding="6"/>
+
+        <!-- Solo en el primer arranque -->
+        <StackPanel Visibility="{Binding EsPrimerArranque, Converter={StaticResource VisibleSiEsTrue}}">
+            <TextBlock Text="Repetir contraseña" Margin="0,12,0,4"/>
+            <PasswordBox x:Name="PwdConfirmar" Padding="6"/>
+        </StackPanel>
+
+        <TextBlock Text="{Binding Mensaje}" TextWrapping="Wrap"
+                   Foreground="Firebrick" FontWeight="SemiBold" Margin="0,12,0,0"/>
+
+        <Button Content="{Binding TextoBoton}" Command="{Binding IngresarCommand}"
+                HorizontalAlignment="Right" Padding="16,8" Margin="0,12,0,0"/>
+    </StackPanel>
+</Window>

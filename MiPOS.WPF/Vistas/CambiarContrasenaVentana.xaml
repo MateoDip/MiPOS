@@ -1,0 +1,46 @@
+<Window x:Class="MiPOS.WPF.Vistas.CambiarContrasenaVentana"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:MiPOS.WPF.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:CambiarContrasenaViewModel}"
+        Title="{Binding Titulo}"
+        Width="420" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        FontSize="16">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="VisibleSiEsTrue"/>
+    </Window.Resources>
+
+    <Window.InputBindings>
+        <KeyBinding Key="Enter"  Command="{Binding GuardarCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding CancelarCommand}"/>
+    </Window.InputBindings>
+
+    <StackPanel Margin="16">
+        <TextBlock Text="{Binding Descripcion}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+
+        <!-- Solo al cambiar la propia -->
+        <StackPanel Visibility="{Binding PideActual, Converter={StaticResource VisibleSiEsTrue}}">
+            <TextBlock Text="Contraseña actual" Margin="0,0,0,4"/>
+            <PasswordBox x:Name="PwdActual" Padding="6" Margin="0,0,0,12"/>
+        </StackPanel>
+
+        <TextBlock Text="Contraseña nueva" Margin="0,0,0,4"/>
+        <PasswordBox x:Name="PwdNueva" Padding="6"/>
+
+        <TextBlock Text="Repetir contraseña nueva" Margin="0,12,0,4"/>
+        <PasswordBox x:Name="PwdConfirmar" Padding="6"/>
+
+        <TextBlock Text="{Binding Mensaje}" TextWrapping="Wrap"
+                   Foreground="Firebrick" FontWeight="SemiBold" Margin="0,12,0,0"/>
+
+        <TextBlock Text="Enter: guardar     Esc: cancelar"
+                   Foreground="Gray" FontSize="13" Margin="0,8,0,0"/>
+    </StackPanel>
+</Window>

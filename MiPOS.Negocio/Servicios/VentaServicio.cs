@@ -2,16 +2,19 @@
 using MiPOS.Datos;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Negocio.Ventas;
+using MiPOS.Seguridad;
 
 namespace MiPOS.Negocio.Servicios;
 
 public class VentaServicio
 {
     private readonly IDbContextFactory<MiPOSDbContext> _fabrica;
+    private readonly Sesion _sesion;
 
-    public VentaServicio(IDbContextFactory<MiPOSDbContext> fabrica)
+    public VentaServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion)
     {
         _fabrica = fabrica;
+        _sesion = sesion;
     }
 
     public async Task<List<MedioPago>> ObtenerMediosPagoAsync()
@@ -31,6 +34,10 @@ public class VentaServicio
     /// </summary>
     public async Task<Venta> RegistrarAsync(Carrito carrito, int medioPagoId, decimal? montoRecibido)
     {
+        // Toda venta queda registrada a nombre del usuario conectado
+        var usuario = _sesion.UsuarioActual
+            ?? throw new VentaInvalidaException("No hay un usuario con sesión iniciada.");
+
         if (carrito.EstaVacio)
             throw new VentaInvalidaException("No hay productos para cobrar.");
 
@@ -40,7 +47,12 @@ public class VentaServicio
         var venta = new Venta
         {
             Fecha = DateTime.Now,
+            Subtotal = carrito.Subtotal,
+            DescuentoPorcentaje = carrito.DescuentoPorcentaje,
+            Descuento = carrito.Descuento,
+            DescuentoAutorizadoPorId = carrito.DescuentoAutorizadoPorId,
             Total = total,
+            UsuarioId = usuario.Id,
             MedioPagoId = medioPagoId,
             Detalles = carrito.Items.Select(i => new DetalleVenta
             {
@@ -60,6 +72,18 @@ public class VentaServicio
 
         if (medio is null)
             throw new VentaInvalidaException("El medio de pago no existe o está desactivado.");
+
+        // Si hay descuento, se vuelve a comprobar en la base que quien lo autorizó
+        // existe, está activo y tiene el permiso (no alcanza con lo que dice la pantalla)
+        if (carrito.TieneDescuento)
+        {
+            var autorizante = await contexto.Usuarios
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == carrito.DescuentoAutorizadoPorId && u.Activo);
+
+            if (autorizante is null || !Permisos.Tiene(autorizante.Rol, Permiso.AplicarDescuento))
+                throw new VentaInvalidaException("El descuento no está autorizado por un usuario con permiso. Quítelo o vuelva a aplicarlo.");
+        }
 
         if (medio.EsEfectivo)
         {

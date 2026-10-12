@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\MiPOS.Dominio\MiPOS.Dominio.csproj" />
     <ProjectReference Include="..\MiPOS.Datos\MiPOS.Datos.csproj" />
+    <ProjectReference Include="..\MiPOS.Seguridad\MiPOS.Seguridad.csproj" />
   </ItemGroup>
 
   <PropertyGroup>

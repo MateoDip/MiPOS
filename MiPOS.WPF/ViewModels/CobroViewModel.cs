@@ -1,10 +1,10 @@
 ﻿using System.Collections.ObjectModel;
-using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Negocio.Ventas;
+using MiPOS.WPF.Servicios;
 
 namespace MiPOS.WPF.ViewModels;
 
@@ -89,15 +89,9 @@ public partial class CobroViewModel : ObservableObject
             : $"Falta: $ {Total - monto:N2}";
     }
 
-    // Acepta solo números con coma decimal y hasta 2 decimales (ej: 1500 o 1500,50).
-    // No se aceptan puntos: en Argentina "1.500" es mil quinientos, y "1500.50"
-    // se leería como 150050. Es más seguro rechazarlo.
+    // El monto que entrega el cliente tiene que ser mayor a cero
     private static bool IntentarLeerMonto(string texto, out decimal monto)
-    {
-        return decimal.TryParse(texto.Trim(), NumberStyles.AllowDecimalPoint, CultureInfo.CurrentCulture, out monto)
-            && monto > 0
-            && decimal.Round(monto, 2) == monto;
-    }
+        => LectorNumeros.IntentarLeerDecimal(texto, out monto) && monto > 0;
 
     // Flecha arriba
     [RelayCommand]

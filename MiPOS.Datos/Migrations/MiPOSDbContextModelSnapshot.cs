@@ -245,6 +245,52 @@ namespace MiPOS.Datos.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.Usuario", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("BloqueadoHastaUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ContrasenaHash")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("FechaAlta")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("IntentosFallidos")
+                        .HasColumnType("int");
+
+                    b.Property<string>("NombreCompleto")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("NombreUsuario")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("Rol")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NombreUsuario")
+                        .IsUnique();
+
+                    b.ToTable("Usuarios", (string)null);
+                });
+
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Venta", b =>
                 {
                     b.Property<int>("Id")
@@ -252,6 +298,17 @@ namespace MiPOS.Datos.Migrations
                         .HasColumnType("int");
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Descuento")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int?>("DescuentoAutorizadoPorId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("DescuentoPorcentaje")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("decimal(5,2)");
 
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("datetime2");
@@ -263,9 +320,16 @@ namespace MiPOS.Datos.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("Total")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("int");
 
                     b.Property<decimal?>("Vuelto")
                         .HasPrecision(18, 2)
@@ -273,9 +337,13 @@ namespace MiPOS.Datos.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DescuentoAutorizadoPorId");
+
                     b.HasIndex("Fecha");
 
                     b.HasIndex("MedioPagoId");
+
+                    b.HasIndex("UsuarioId");
 
                     b.ToTable("Ventas", (string)null);
                 });
@@ -312,13 +380,28 @@ namespace MiPOS.Datos.Migrations
 
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Venta", b =>
                 {
+                    b.HasOne("MiPOS.Dominio.Entidades.Usuario", "DescuentoAutorizadoPor")
+                        .WithMany()
+                        .HasForeignKey("DescuentoAutorizadoPorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MiPOS.Dominio.Entidades.MedioPago", "MedioPago")
                         .WithMany()
                         .HasForeignKey("MedioPagoId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MiPOS.Dominio.Entidades.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("DescuentoAutorizadoPor");
+
                     b.Navigation("MedioPago");
+
+                    b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Categoria", b =>
