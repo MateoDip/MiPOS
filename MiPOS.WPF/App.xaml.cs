@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MiPOS.Datos;
 using MiPOS.Negocio.Servicios;
+using MiPOS.WPF.Servicios;
 using MiPOS.WPF.ViewModels;
 using MiPOS.WPF.Vistas;
 
@@ -38,8 +39,11 @@ public partial class App : Application
             opciones.UseSqlServer(configuracion.GetConnectionString("MiPOS")));
 
         servicios.AddTransient<ProductoServicio>();
+        servicios.AddTransient<DialogoServicio>();
         servicios.AddTransient<CajaViewModel>();
         servicios.AddTransient<CajaVentana>();
+        servicios.AddTransient<BuscarProductoViewModel>();
+        servicios.AddTransient<CantidadViewModel>();
 
         var proveedor = servicios.BuildServiceProvider();
 

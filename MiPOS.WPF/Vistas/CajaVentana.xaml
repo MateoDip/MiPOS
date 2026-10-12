@@ -12,6 +12,14 @@
         WindowState="Maximized"
         FontSize="16">
 
+    <!-- Atajos de teclado de la caja (funcionan aunque el cursor esté en el campo de código) -->
+    <Window.InputBindings>
+        <KeyBinding Key="F1"     Command="{Binding BuscarProductoCommand}"/>
+        <KeyBinding Key="F4"     Command="{Binding EliminarCommand}"/>
+        <KeyBinding Key="F5"     Command="{Binding CambiarCantidadCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding CancelarVentaCommand}"/>
+    </Window.InputBindings>
+
     <Grid Margin="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -22,6 +30,8 @@
             <!-- Mensaje -->
             <RowDefinition Height="*"/>
             <!-- Carrito -->
+            <RowDefinition Height="Auto"/>
+            <!-- Botones -->
             <RowDefinition Height="Auto"/>
             <!-- Total -->
         </Grid.RowDefinitions>
@@ -40,6 +50,9 @@
                      Text="{Binding CodigoIngresado, UpdateSourceTrigger=PropertyChanged}">
                 <TextBox.InputBindings>
                     <KeyBinding Key="Enter" Command="{Binding AgregarPorCodigoCommand}"/>
+                    <!-- Las flechas mueven la selección del carrito sin sacar el cursor de acá -->
+                    <KeyBinding Key="Up"    Command="{Binding SeleccionarAnteriorCommand}"/>
+                    <KeyBinding Key="Down"  Command="{Binding SeleccionarSiguienteCommand}"/>
                 </TextBox.InputBindings>
             </TextBox>
         </StackPanel>
@@ -49,7 +62,7 @@
                    Foreground="Firebrick" FontWeight="SemiBold" Margin="0,8,0,0"/>
 
         <!-- Carrito -->
-        <DataGrid Grid.Row="3" Margin="0,12"
+        <DataGrid x:Name="GrillaCarrito" Grid.Row="3" Margin="0,12"
                   ItemsSource="{Binding Items}"
                   SelectedItem="{Binding ItemSeleccionado}"
                   AutoGenerateColumns="False"
@@ -66,8 +79,22 @@
             </DataGrid.Columns>
         </DataGrid>
 
+        <!-- Botones de operación. Focusable="False": al hacer clic, el cursor sigue en el campo de código -->
+        <StackPanel Grid.Row="4" Orientation="Horizontal" Margin="0,0,0,12">
+            <StackPanel.Resources>
+                <Style TargetType="Button">
+                    <Setter Property="Focusable" Value="False"/>
+                    <Setter Property="Padding" Value="16,8"/>
+                    <Setter Property="Margin" Value="0,0,8,0"/>
+                </Style>
+            </StackPanel.Resources>
+            <Button Content="F4  Eliminar"  Command="{Binding EliminarCommand}"/>
+            <Button Content="F5  Cantidad"  Command="{Binding CambiarCantidadCommand}"/>
+            <Button Content="ESC  Cancelar" Command="{Binding CancelarVentaCommand}"/>
+        </StackPanel>
+
         <!-- Totales -->
-        <Grid Grid.Row="4">
+        <Grid Grid.Row="5">
             <TextBlock Text="{Binding CantidadArticulos, StringFormat='Artículos: {0}'}"
                        VerticalAlignment="Center"/>
             <TextBlock Text="{Binding Total, StringFormat='TOTAL: $ {0:N2}'}"

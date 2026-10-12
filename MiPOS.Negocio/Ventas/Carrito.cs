@@ -19,6 +19,8 @@ public class Carrito
 
     public int CantidadArticulos => _items.Sum(i => i.Cantidad);
 
+    public bool EstaVacio => _items.Count == 0;
+
     public ItemCarrito Agregar(Producto producto, int cantidad = 1)
     {
         if (cantidad <= 0)
@@ -35,6 +37,23 @@ public class Carrito
         var nuevo = new ItemCarrito(producto, cantidad);
         _items.Add(nuevo);
         return nuevo;
+    }
+
+    public void Eliminar(ItemCarrito item)
+    {
+        if (!_items.Remove(item))
+            throw new InvalidOperationException("El producto no está en el carrito.");
+    }
+
+    public void CambiarCantidad(ItemCarrito item, int nuevaCantidad)
+    {
+        if (nuevaCantidad <= 0)
+            throw new ArgumentOutOfRangeException(nameof(nuevaCantidad), "La cantidad debe ser mayor a cero.");
+
+        if (!_items.Contains(item))
+            throw new InvalidOperationException("El producto no está en el carrito.");
+
+        item.Cantidad = nuevaCantidad;
     }
 
     public void Vaciar() => _items.Clear();
