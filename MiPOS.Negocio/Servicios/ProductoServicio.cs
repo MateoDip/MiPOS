@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+ï»¿using Microsoft.EntityFrameworkCore;
 using MiPOS.Datos;
 using MiPOS.Dominio.Entidades;
 
@@ -20,7 +20,7 @@ public class ProductoServicio
 
         codigo = codigo.Trim();
 
-        // Se abre una conexión solo para esta búsqueda y se cierra al terminar
+        // Se abre una conexiÃ³n solo para esta bÃºsqueda y se cierra al terminar
         await using var contexto = await _fabrica.CreateDbContextAsync();
 
         return await contexto.Productos

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+ï»¿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using MiPOS.Dominio.Entidades;
 
@@ -15,22 +15,22 @@ public class ProductoConfiguracion : IEntityTypeConfiguration<Producto>
                .IsRequired()
                .HasMaxLength(50);
 
-        // El código de barras no se puede repetir, y el índice
-        // hace que la búsqueda al escanear sea muy rápida
+        // El cÃ³digo de barras no se puede repetir, y el Ã­ndice
+        // hace que la bÃºsqueda al escanear sea muy rÃ¡pida
         builder.HasIndex(p => p.CodigoBarras).IsUnique();
 
         builder.Property(p => p.Nombre)
                .IsRequired()
                .HasMaxLength(150);
 
-        // Índice para acelerar la búsqueda por nombre
+        // Ãndice para acelerar la bÃºsqueda por nombre
         builder.HasIndex(p => p.Nombre);
 
-        // 18 dígitos en total, 2 decimales (centavos)
+        // 18 dÃ­gitos en total, 2 decimales (centavos)
         builder.Property(p => p.Precio).HasPrecision(18, 2);
 
-        // Un producto pertenece a una categoría.
-        // Restrict: no se puede borrar una categoría que tenga productos.
+        // Un producto pertenece a una categorÃ­a.
+        // Restrict: no se puede borrar una categorÃ­a que tenga productos.
         builder.HasOne(p => p.Categoria)
                .WithMany(c => c.Productos)
                .HasForeignKey(p => p.CategoriaId)

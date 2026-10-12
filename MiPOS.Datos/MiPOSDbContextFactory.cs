@@ -1,10 +1,10 @@
-using Microsoft.EntityFrameworkCore;
+Ôªøusing Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
 namespace MiPOS.Datos;
 
 // Esta clase solo la usa "dotnet ef" al crear migraciones.
-// El programa real tomar· la conexiÛn de un archivo de configuraciÛn (lo vemos m·s adelante).
+// El programa real tomar√° la conexi√≥n de un archivo de configuraci√≥n (lo vemos m√°s adelante).
 public class MiPOSDbContextFactory : IDesignTimeDbContextFactory<MiPOSDbContext>
 {
     public MiPOSDbContext CreateDbContext(string[] args)

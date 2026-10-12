@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using MiPOS.Dominio.Entidades;
 
 namespace MiPOS.Datos;
@@ -13,7 +13,7 @@ public class MiPOSDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Busca autom�ticamente todas las clases de la carpeta Configuraciones
+        // Busca automáticamente todas las clases de la carpeta Configuraciones
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MiPOSDbContext).Assembly);
     }
 }

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using MiPOS.Dominio.Entidades;
 
@@ -19,7 +19,7 @@ public class CategoriaConfiguracion : IEntityTypeConfiguration<Categoria>
 
 		// Datos iniciales para poder probar
 		builder.HasData(
-			new Categoria { Id = 1, Nombre = "Almac�n" },
+			new Categoria { Id = 1, Nombre = "Almacén" },
 			new Categoria { Id = 2, Nombre = "Bebidas" },
 			new Categoria { Id = 3, Nombre = "Limpieza" }
 		);

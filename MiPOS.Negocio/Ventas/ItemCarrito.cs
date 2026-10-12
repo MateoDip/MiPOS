@@ -1,11 +1,11 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using MiPOS.Dominio.Entidades;
 
 namespace MiPOS.Negocio.Ventas;
 
 /// <summary>
-/// Una l�nea del carrito: un producto con su cantidad.
+/// Una línea del carrito: un producto con su cantidad.
 /// Avisa a la pantalla cuando cambia la cantidad (INotifyPropertyChanged).
 /// </summary>
 public class ItemCarrito : INotifyPropertyChanged
