@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Hardware.Impresion;
+using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Negocio.Ventas;
 using MiPOS.Seguridad;
@@ -15,25 +16,29 @@ public partial class CajaViewModel : ObservableObject
 {
     private const string MensajeCantidadInvalida = "Cantidad inválida: ingrese un número entero mayor a cero.";
 
+    private const string MensajeCajaCerrada = "La caja está cerrada. Presione F11 para abrirla.";
+
     private const string MensajeDescuentoInvalido = "Descuento inválido: ingrese un porcentaje mayor a 0 y hasta 100, con coma para los decimales (ej: 10 o 12,5).";
 
     private readonly ProductoServicio _productoServicio;
     private readonly UsuarioServicio _usuarioServicio;
     private readonly VentaServicio _ventaServicio;
     private readonly TicketServicio _ticketServicio;
+    private readonly CajaServicio _cajaServicio;
     private readonly IImpresoraTicket _impresora;
     private readonly DialogoServicio _dialogos;
     private readonly Sesion _sesion;
     private readonly Carrito _carrito = new();
 
     public CajaViewModel(ProductoServicio productoServicio, UsuarioServicio usuarioServicio,
-                         VentaServicio ventaServicio, TicketServicio ticketServicio,
+                         VentaServicio ventaServicio, TicketServicio ticketServicio, CajaServicio cajaServicio,
                          IImpresoraTicket impresora, DialogoServicio dialogos, Sesion sesion)
     {
         _productoServicio = productoServicio;
         _usuarioServicio = usuarioServicio;
         _ventaServicio = ventaServicio;
         _ticketServicio = ticketServicio;
+        _cajaServicio = cajaServicio;
         _impresora = impresora;
         _dialogos = dialogos;
         _sesion = sesion;
@@ -57,6 +62,28 @@ public partial class CajaViewModel : ObservableObject
     public string TextoDescuento => $"Descuento {_carrito.DescuentoPorcentaje:0.##}%: - $ {_carrito.Descuento:N2}";
     public decimal Total => _carrito.Total;
     public int CantidadArticulos => _carrito.CantidadArticulos;
+
+    // Turno abierto de la caja de esta PC (null = caja cerrada)
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CajaAbierta))]
+    [NotifyPropertyChangedFor(nameof(CajaTexto))]
+    [NotifyPropertyChangedFor(nameof(TextoBotonCaja))]
+    [NotifyCanExecuteChangedFor(nameof(RegistrarMovimientoCajaCommand))]
+    private TurnoCaja? turno;
+
+    // Nombre de la caja de esta PC (se completa al cargar)
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CajaTexto))]
+    private string nombreCaja = string.Empty;
+
+    public bool CajaAbierta => Turno is not null;
+
+    // Ej: "Caja 1 · Abierta desde 08:15" o "Caja 1 · CERRADA"
+    public string CajaTexto => Turno is { } turnoAbierto
+        ? $"{NombreCaja} · Abierta desde {turnoAbierto.FechaApertura:HH:mm}"
+        : $"{NombreCaja} · CERRADA";
+
+    public string TextoBotonCaja => CajaAbierta ? "F11  Cerrar caja" : "F11  Abrir caja";
 
     // [ObservableProperty] genera una propiedad pública "CodigoIngresado"
     // que avisa a la pantalla cada vez que cambia
@@ -88,6 +115,12 @@ public partial class CajaViewModel : ObservableObject
         if (string.IsNullOrWhiteSpace(codigo))
             return;
 
+        if (!CajaAbierta)
+        {
+            Mensaje = MensajeCajaCerrada;
+            return;
+        }
+
         try
         {
             var producto = await _productoServicio.BuscarPorCodigoAsync(codigo);
@@ -113,6 +146,13 @@ public partial class CajaViewModel : ObservableObject
     [RelayCommand]
     private void BuscarProducto()
     {
+        if (!CajaAbierta)
+        {
+            Mensaje = MensajeCajaCerrada;
+            AccionTerminada?.Invoke();
+            return;
+        }
+
         var producto = _dialogos.BuscarProducto();
 
         if (producto is not null)
@@ -205,6 +245,132 @@ public partial class CajaViewModel : ObservableObject
         {
             Mensaje = $"No se pudo imprimir el ticket de la venta N° {ventaId}. Use F8 para reimprimir.";
         }
+    }
+
+    // Al abrir la pantalla: se averigua si la caja está abierta. Si está cerrada, se ofrece abrirla.
+    [RelayCommand]
+    private async Task CargarCajaAsync()
+    {
+        try
+        {
+            NombreCaja = (await _cajaServicio.ObtenerCajaAsync()).Nombre;
+            Turno = await _cajaServicio.ObtenerTurnoAbiertoAsync();
+
+            if (!CajaAbierta)
+                await AbrirCajaAsync();
+        }
+        catch (CajaInvalidaException ex)
+        {
+            Mensaje = ex.Message;
+        }
+        catch (Exception)
+        {
+            Mensaje = "Error al consultar el estado de la caja. Verifique la conexión con la base de datos.";
+        }
+
+        AccionTerminada?.Invoke();
+    }
+
+    // F11: abrir la caja si está cerrada, o cerrarla (con arqueo) si está abierta
+    [RelayCommand]
+    private async Task AbrirOCerrarCajaAsync()
+    {
+        if (CajaAbierta)
+            CerrarCaja();
+        else
+            await AbrirCajaAsync();
+
+        AccionTerminada?.Invoke();
+    }
+
+    private async Task AbrirCajaAsync()
+    {
+        var texto = _dialogos.PedirMontoInicial();
+
+        // null = se canceló: la caja queda cerrada
+        if (texto is null)
+        {
+            Mensaje = MensajeCajaCerrada;
+            return;
+        }
+
+        if (!LectorNumeros.IntentarLeerDecimal(texto, out var montoInicial))
+        {
+            Mensaje = "Monto inválido: ingrese solo números, con coma para los centavos (ej: 10000 o 10000,50). Presione F11 para intentar de nuevo.";
+            return;
+        }
+
+        try
+        {
+            Turno = await _cajaServicio.AbrirTurnoAsync(montoInicial);
+            NombreCaja = Turno.Caja?.Nombre ?? NombreCaja;
+            Mensaje = string.Empty;
+            MensajeExito = $"Caja abierta con $ {montoInicial:N2}.";
+        }
+        catch (CajaInvalidaException ex)
+        {
+            Mensaje = ex.Message;
+
+            // Si otra PC la abrió recién, se sigue con ese turno
+            try { Turno = await _cajaServicio.ObtenerTurnoAbiertoAsync(); }
+            catch (Exception) { }
+        }
+        catch (Exception)
+        {
+            Mensaje = "Error al abrir la caja. Verifique la conexión con la base de datos.";
+        }
+    }
+
+    private void CerrarCaja()
+    {
+        if (!_carrito.EstaVacio)
+        {
+            Mensaje = "Termine o cancele la venta antes de cerrar la caja.";
+            return;
+        }
+
+        var resumen = _dialogos.CerrarCaja();
+
+        // null = volvió sin cerrar
+        if (resumen is null)
+            return;
+
+        Turno = null;
+        Mensaje = string.Empty;
+        MensajeExito = "Caja cerrada. Presione F11 para abrir un nuevo turno.";
+
+        // El comprobante del arqueo se imprime sin esperar (igual que el ticket de venta)
+        _ = ImprimirCierreAsync(resumen.Turno.Id);
+    }
+
+    private async Task ImprimirCierreAsync(int turnoId)
+    {
+        try
+        {
+            var lineas = await _ticketServicio.ArmarCierreAsync(turnoId, _impresora.CaracteresPorLinea);
+            await _impresora.ImprimirAsync(lineas, $"Cierre de caja {turnoId}");
+        }
+        catch (ImpresionException ex)
+        {
+            Mensaje = $"No se pudo imprimir el cierre de caja (turno N° {turnoId}). {ex.Message}";
+        }
+        catch (Exception)
+        {
+            Mensaje = $"No se pudo imprimir el cierre de caja (turno N° {turnoId}).";
+        }
+    }
+
+    // F7: retiro o ingreso de efectivo (solo con la caja abierta)
+    [RelayCommand(CanExecute = nameof(CajaAbierta))]
+    private void RegistrarMovimientoCaja()
+    {
+        if (_dialogos.RegistrarMovimientoCaja())
+        {
+            Mensaje = string.Empty;
+            MensajeExito = "Movimiento de efectivo registrado.";
+        }
+
+        AccionTerminada?.Invoke();
     }
 
     // F4: eliminar el producto seleccionado

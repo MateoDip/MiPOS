@@ -29,8 +29,8 @@ MiPOS es un sistema POS (punto de venta) para comercios minoristas, principalmen
 |---|---|---|
 | `MiPOS.Dominio` | Entidades (`Entidades/`) | Nada |
 | `MiPOS.Datos` | `MiPOSDbContext`, configuraciones Fluent API (`Configuraciones/`), migraciones, `MiPOSDbContextFactory` (solo para `dotnet ef`) | Dominio |
-| `MiPOS.Negocio` | Servicios (`Servicios/`: `ProductoServicio`, `VentaServicio`, `UsuarioServicio`), lógica de venta (`Ventas/`: `Carrito`, `ItemCarrito`, `Cobro`) y de usuarios (`Usuarios/`) | Dominio, Datos, Seguridad |
-| `MiPOS.WPF` | `Vistas/`, `ViewModels/`, `Servicios/` (`DialogoServicio`, `LectorNumeros`), `App.xaml.cs` (inyección de dependencias e inicio de sesión), `appsettings.json` | Negocio, Dominio, Seguridad |
+| `MiPOS.Negocio` | Servicios (`Servicios/`: `ProductoServicio`, `VentaServicio`, `UsuarioServicio`, `TicketServicio`, `CajaServicio`), lógica de venta (`Ventas/`: `Carrito`, `ItemCarrito`, `Cobro`), de usuarios (`Usuarios/`), de caja (`Cajas/`: `ResumenTurno`, `OpcionesCaja`) y comprobantes (`Comprobantes/`: `TicketVenta`, `TicketCierreCaja`, `FormatoTicket`, `DatosComercio`) | Dominio, Datos, Seguridad |
+| `MiPOS.WPF` | `Vistas/`, `ViewModels/`, `Servicios/` (`DialogoServicio`, `LectorNumeros`, `VisibleSiFalse`), `App.xaml.cs` (inyección de dependencias e inicio de sesión), `appsettings.json` | Negocio, Dominio, Seguridad, Hardware |
 | `MiPOS.Seguridad` | Hash de contraseñas (`HashContrasena`), permisos por rol (`Permiso`, `Permisos`), usuario conectado (`Sesion`) | Dominio |
 | `MiPOS.Hardware` | Impresión de tickets (`Impresion/`: `IImpresoraTicket`, `ImpresoraWindows`, `ImpresoraArchivo`, `OpcionesImpresion`). Solo Windows (`net10.0-windows`, usa WPF) | Nada |
 | `MiPOS.Pruebas` | Consola para pruebas manuales contra la base real (`net10.0-windows`) | Negocio, Datos, Seguridad, Hardware |
@@ -65,6 +65,8 @@ Más adelante se agregará `MiPOS.Facturacion` siguiendo el mismo criterio.
 - **Impresión:** se usa la impresión común de Windows (cualquier impresora con driver), no comandos ESC/POS. Todo se configura por instalación en la sección `Impresion` de `appsettings.json` (`Modo` = `Windows` o `Archivo`, `Impresora` vacío = predeterminada, `AnchoPapelMm`, `CaracteresPorLinea`, `MargenMm`, `PapelContinuo`, `CarpetaArchivos`). En el repositorio queda `Modo = Archivo` para desarrollar sin impresora. `IImpresoraTicket` es una interfaz aprobada (dos implementaciones reales). `MiPOS.Hardware` no depende de ningún otro proyecto: recibe el ticket como líneas de texto.
 - **Ticket:** lo arma `TicketVenta` (en `MiPOS.Negocio/Comprobantes`) siempre desde la venta guardada en la base, con letra de ancho fijo y montos en formato es-AR. Mientras no haya facturación electrónica dice "NO VÁLIDO COMO FACTURA". Se imprime automáticamente al cobrar; si falla, la venta queda registrada igual y se avisa para reimprimir con F8 (que marca "REIMPRESIÓN").
 - **Datos del comercio:** el software se vende a distintos negocios, así que nombre, dirección, CUIT, teléfono y mensaje de pie van en la sección `Comercio` de `appsettings.json` (los vacíos no se imprimen). Más adelante pasarán a una pantalla de configuración.
+- **Control de caja:** por ahora siempre activo (el interruptor del módulo llegará con la pantalla de configuración). Las cajas están en la tabla `Cajas` y cada PC indica la suya en `Caja:Numero` de `appsettings.json`. El turno (`TurnoCaja`) es de la caja, no del cajero: si cambia el usuario se sigue en el mismo turno, y cada venta guarda igual quién la hizo. La base impide dos turnos abiertos en la misma caja (índice único filtrado). Las ventas anteriores al control de caja quedan con `TurnoCajaId` en null.
+- **Arqueo ciego:** al cerrar, el cajero informa el efectivo contado sin ver el esperado; después se muestra la diferencia (contado − esperado). Retiros e ingresos de efectivo llevan motivo y entran en el arqueo; el retiro requiere el permiso `RetirarEfectivo` (autorización de administrador, verificada de nuevo en la base) y no puede superar el efectivo esperado. El efectivo esperado se calcula solo en `ResumenTurno` (inicial + ventas en efectivo + ingresos − retiros). No se vende con la caja cerrada: `VentaServicio` lo exige y guarda el turno. Al entrar a la caja, si está cerrada se ofrece abrirla. El cierre imprime un comprobante (`TicketCierreCaja`) y requiere el carrito vacío. Errores de caja: `CajaInvalidaException` (mensaje mostrado tal cual).
 - **Montos ingresados por el cajero:** solo números con coma decimal y hasta 2 decimales; no se aceptan puntos (en `es-AR` "1500.50" se leería como 150050).
 
 ## Codificación de archivos
@@ -91,7 +93,7 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 
 **Flujo de venta:** caja → escanear/buscar → agregar al carrito → cambiar cantidad/eliminar → total → descuento opcional (requiere contraseña de administrador) → cobrar → medio de pago → comprobante (ticket fiscal o interno) → registrar venta → descontar stock si el módulo está activo → nueva venta.
 
-**Atajos de teclado de la caja:** F1 buscar, F2 producto, F3 cobrar, F4 eliminar, F5 cambiar cantidad, F6 descuento, F8 reimprimir último ticket, F9 usuarios (solo administrador), F10 cambiar mi contraseña, F12 cerrar sesión, ESC cancelar.
+**Atajos de teclado de la caja:** F1 buscar, F2 producto, F3 cobrar, F4 eliminar, F5 cambiar cantidad, F6 descuento, F7 retiro/ingreso de efectivo, F8 reimprimir último ticket, F9 usuarios (solo administrador), F10 cambiar mi contraseña, F11 abrir/cerrar caja, F12 cerrar sesión, ESC cancelar.
 
 **Medios de pago:** efectivo, débito, crédito, Mercado Pago, QR, transferencia. Un único medio por venta. En efectivo se calcula el vuelto.
 
@@ -104,13 +106,19 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 1. POS básico — **terminada**
 2. Usuarios (Cajero, Administrador, permisos, autorización por contraseña) — **terminada**
 3. Impresión (ticket, impresora térmica) — **terminada** (pendiente la prueba en pantalla junto con el testeo general)
-4. Control de caja
+4. Control de caja — **terminada** (pendiente la prueba en pantalla junto con el testeo general)
 5. Stock y compras
 6. Facturación (ARCA)
 7. Hardware (scanner, impresora, cajón, terminal POS)
 8. Offline y sincronización
 9. Licenciamiento
 10. Multidioma (español y chino)
+
+## Estado de la Fase 4 (terminada)
+
+- [x] 4.1 Entidades `Caja`, `TurnoCaja`, `MovimientoCaja` y turno en cada `Venta` (migración `AgregarControlDeCaja`, Caja 1 inicial, `Caja:Numero` en `appsettings.json`)
+- [x] 4.2 `CajaServicio`: abrir turno, retiros e ingresos, cierre con arqueo; toda venta exige turno abierto
+- [x] 4.3 Pantallas: apertura al entrar, retiro/ingreso (F7), cierre con arqueo ciego (F11), resumen y ticket de cierre
 
 ## Estado de la Fase 3 (terminada)
 

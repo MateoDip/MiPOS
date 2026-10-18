@@ -7,6 +7,8 @@ using MiPOS.Dominio.Entidades;
 using MiPOS.Seguridad;
 using MiPOS.Negocio.Comprobantes;
 using MiPOS.Hardware.Impresion;
+using MiPOS.Negocio.Cajas;
+using MiPOS.Negocio.Ventas;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -126,4 +128,104 @@ try
 catch (ImpresionException ex)
 {
     Console.WriteLine($"Configuración inválida da error: OK ({ex.Message})");
+}
+
+// --- Prueba 9: control de caja (contra la base real) ---
+// Se usa una caja de pruebas (N° 99) para no tocar el turno de la Caja 1.
+// Las ventas de esta prueba quedan registradas en la base de desarrollo, en la caja 99.
+Console.WriteLine("\n=== Control de caja ===");
+var fabrica = new PooledDbContextFactory<MiPOSDbContext>(opciones);
+await using (var contexto = await fabrica.CreateDbContextAsync())
+{
+    var cajaPruebas = await contexto.Cajas.FirstOrDefaultAsync(c => c.Numero == 99);
+    if (cajaPruebas is null)
+        contexto.Cajas.Add(new Caja { Numero = 99, Nombre = "Caja de pruebas" });
+    else
+        cajaPruebas.Activa = true;
+    await contexto.SaveChangesAsync();
+}
+
+await using (var contexto = await fabrica.CreateDbContextAsync())
+{
+    var administrador = await contexto.Usuarios.AsNoTracking()
+        .FirstOrDefaultAsync(u => u.Activo && u.Rol == Rol.Administrador);
+
+    if (administrador is null)
+        Console.WriteLine("No hay un administrador activo: se saltean las pruebas de caja.");
+    else
+        await ProbarCajaAsync(fabrica, administrador);
+
+    // La caja de pruebas queda desactivada para que no aparezca en el sistema
+    await contexto.Cajas.Where(c => c.Numero == 99).ExecuteUpdateAsync(s => s.SetProperty(c => c.Activa, false));
+}
+
+static async Task ProbarCajaAsync(PooledDbContextFactory<MiPOSDbContext> fabrica, Usuario administrador)
+{
+    var sesion = new Sesion();
+    sesion.Iniciar(administrador);
+    var opcionesCaja = new OpcionesCaja { Numero = 99 };
+    var cajaServicio = new CajaServicio(fabrica, sesion, opcionesCaja);
+    var ventaServicio = new VentaServicio(fabrica, sesion, opcionesCaja);
+    var productoServicio = new ProductoServicio(fabrica);
+
+    // Si quedó abierta de una prueba anterior que falló, se cierra
+    if (await cajaServicio.ObtenerTurnoAbiertoAsync() is not null)
+        await cajaServicio.CerrarTurnoAsync(0);
+
+    var carrito = new Carrito();
+    carrito.Agregar((await productoServicio.BuscarPorCodigoAsync("7791234"))!); // $ 2.500
+
+    await Esperar<VentaInvalidaException>("Vender con la caja cerrada da error",
+        () => ventaServicio.RegistrarAsync(carrito, 1, 3000m));
+
+    var turno = await cajaServicio.AbrirTurnoAsync(1000m);
+    Console.WriteLine($"Abrir con $ 1.000,00: OK (turno N° {turno.Id})");
+
+    await Esperar<CajaInvalidaException>("Abrir dos veces da error", () => cajaServicio.AbrirTurnoAsync(0));
+
+    var venta1 = await ventaServicio.RegistrarAsync(carrito, 1, 3000m);   // efectivo
+    var venta2 = await ventaServicio.RegistrarAsync(carrito, 2, null);    // débito
+    Console.WriteLine($"Las ventas quedan en el turno: {(venta1.TurnoCajaId == turno.Id && venta2.TurnoCajaId == turno.Id ? "OK" : "ERROR")}");
+
+    await cajaServicio.RegistrarMovimientoAsync(TipoMovimientoCaja.Ingreso, 500m, "Cambio del banco", null);
+    Console.WriteLine("Ingreso de $ 500,00 sin autorización: OK");
+
+    await Esperar<PermisoDenegadoException>("Retiro sin autorización da error",
+        () => cajaServicio.RegistrarMovimientoAsync(TipoMovimientoCaja.Retiro, 100m, "Prueba", null));
+    await Esperar<CajaInvalidaException>("Movimiento sin motivo da error",
+        () => cajaServicio.RegistrarMovimientoAsync(TipoMovimientoCaja.Ingreso, 100m, "  ", null));
+    await Esperar<CajaInvalidaException>("Retiro mayor al efectivo da error",
+        () => cajaServicio.RegistrarMovimientoAsync(TipoMovimientoCaja.Retiro, 999999m, "Prueba", administrador.Id));
+
+    await cajaServicio.RegistrarMovimientoAsync(TipoMovimientoCaja.Retiro, 1000m, "Retiro parcial", administrador.Id);
+    Console.WriteLine("Retiro de $ 1.000,00 autorizado: OK");
+
+    // Esperado: 1.000 inicial + 2.500 ventas en efectivo + 500 ingreso - 1.000 retiro = 3.000
+    var resumen = await cajaServicio.CerrarTurnoAsync(2900m);
+    Console.WriteLine($"Efectivo esperado $ 3.000,00: {(resumen.EfectivoEsperado == 3000m ? "OK" : $"ERROR ({resumen.EfectivoEsperado:N2})")}");
+    Console.WriteLine($"Diferencia -$ 100,00: {(resumen.Turno.Diferencia == -100m ? "OK" : $"ERROR ({resumen.Turno.Diferencia:N2})")}");
+    Console.WriteLine($"Ventas del turno: 2 por $ 5.000,00: {(resumen.CantidadVentas == 2 && resumen.TotalVentas == 5000m ? "OK" : "ERROR")}");
+    Console.WriteLine($"Turno cerrado: {(await cajaServicio.ObtenerTurnoAbiertoAsync() is null ? "OK" : "ERROR")}");
+
+    await Esperar<CajaInvalidaException>("Cerrar con la caja cerrada da error", () => cajaServicio.CerrarTurnoAsync(0));
+
+    Console.WriteLine("\n=== Ticket de cierre de caja ===");
+    var lineasCierre = TicketCierreCaja.Armar(resumen, new DatosComercio { Nombre = "Almacén Don Pepe" }, 42);
+    foreach (var linea in lineasCierre)
+        Console.WriteLine($"|{linea.PadRight(42)}|");
+    Console.WriteLine($"Ninguna línea supera el ancho: {(lineasCierre.All(l => l.Length <= 42) ? "OK" : "ERROR")}");
+}
+
+// Ejecuta la acción y comprueba que lance el error esperado
+static async Task Esperar<TError>(string descripcion, Func<Task> accion) where TError : Exception
+{
+    try
+    {
+        await accion();
+        Console.WriteLine($"{descripcion}: ERROR (no falló)");
+    }
+    catch (TError ex)
+    {
+        Console.WriteLine($"{descripcion}: OK ({ex.Message})");
+    }
 }

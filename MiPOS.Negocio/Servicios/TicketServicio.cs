@@ -11,12 +11,15 @@ public class TicketServicio
     private readonly IDbContextFactory<MiPOSDbContext> _fabrica;
     private readonly DatosComercio _comercio;
     private readonly Sesion _sesion;
+    private readonly CajaServicio _cajaServicio;
 
-    public TicketServicio(IDbContextFactory<MiPOSDbContext> fabrica, DatosComercio comercio, Sesion sesion)
+    public TicketServicio(IDbContextFactory<MiPOSDbContext> fabrica, DatosComercio comercio, Sesion sesion,
+                          CajaServicio cajaServicio)
     {
         _fabrica = fabrica;
         _comercio = comercio;
         _sesion = sesion;
+        _cajaServicio = cajaServicio;
     }
 
     /// <summary>
@@ -34,9 +37,17 @@ public class TicketServicio
             .Include(v => v.Detalles.OrderBy(d => d.Id))
             .Include(v => v.MedioPago)
             .Include(v => v.Usuario)
+            .Include(v => v.TurnoCaja!.Caja)
             .FirstOrDefaultAsync(v => v.Id == ventaId)
             ?? throw new VentaInvalidaException($"La venta N° {ventaId} no existe.");
 
         return TicketVenta.Armar(venta, _comercio, caracteresPorLinea, esReimpresion);
+    }
+
+    // Comprobante de cierre de caja (arqueo) de un turno, armado desde la base
+    public async Task<IReadOnlyList<string>> ArmarCierreAsync(int turnoId, int caracteresPorLinea)
+    {
+        var resumen = await _cajaServicio.ObtenerResumenAsync(turnoId);
+        return TicketCierreCaja.Armar(resumen, _comercio, caracteresPorLinea);
     }
 }

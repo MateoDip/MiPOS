@@ -35,6 +35,12 @@ public class VentaConfiguracion : IEntityTypeConfiguration<Venta>
                .HasForeignKey(v => v.UsuarioId)
                .OnDelete(DeleteBehavior.Restrict);
 
+        // Restrict: no se puede borrar un turno que tenga ventas
+        builder.HasOne(v => v.TurnoCaja)
+               .WithMany()
+               .HasForeignKey(v => v.TurnoCajaId)
+               .OnDelete(DeleteBehavior.Restrict);
+
         // Restrict: no se puede borrar un medio de pago que tenga ventas
         builder.HasOne(v => v.MedioPago)
                .WithMany()

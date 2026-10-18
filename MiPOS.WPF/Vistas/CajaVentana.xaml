@@ -1,9 +1,10 @@
-<Window x:Class="MiPOS.WPF.Vistas.CajaVentana"
+﻿<Window x:Class="MiPOS.WPF.Vistas.CajaVentana"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:vm="clr-namespace:MiPOS.WPF.ViewModels"
+        xmlns:conv="clr-namespace:MiPOS.WPF.Servicios"
         mc:Ignorable="d"
         d:DataContext="{d:DesignInstance Type=vm:CajaViewModel}"
         Title="MiPOS - Caja"
@@ -19,15 +20,18 @@
         <KeyBinding Key="F4"     Command="{Binding EliminarCommand}"/>
         <KeyBinding Key="F5"     Command="{Binding CambiarCantidadCommand}"/>
         <KeyBinding Key="F6"     Command="{Binding AplicarDescuentoCommand}"/>
+        <KeyBinding Key="F7"     Command="{Binding RegistrarMovimientoCajaCommand}"/>
         <KeyBinding Key="F8"     Command="{Binding ReimprimirUltimoTicketCommand}"/>
         <KeyBinding Key="F9"     Command="{Binding GestionarUsuariosCommand}"/>
         <!-- F10 no se puede poner acá: Windows la usa para el menú. Se maneja en CajaVentana.xaml.cs -->
+        <KeyBinding Key="F11"    Command="{Binding AbrirOCerrarCajaCommand}"/>
         <KeyBinding Key="F12"    Command="{Binding CerrarSesionCommand}"/>
         <KeyBinding Key="Escape" Command="{Binding CancelarVentaCommand}"/>
     </Window.InputBindings>
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="VisibleSiEsTrue"/>
+        <conv:VisibleSiFalse x:Key="VisibleSiFalse"/>
     </Window.Resources>
 
     <Grid Margin="16">
@@ -50,7 +54,7 @@
         <Grid Grid.Row="0" Margin="0,0,0,12">
             <TextBlock Text="MiPOS" FontSize="26" FontWeight="Bold"/>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
-                <TextBlock Text="Caja 01"/>
+                <TextBlock Text="{Binding CajaTexto}"/>
                 <TextBlock Text="  ·  " Foreground="Gray"/>
                 <TextBlock Text="{Binding UsuarioTexto}" FontWeight="SemiBold"/>
             </StackPanel>
@@ -73,6 +77,12 @@
 
         <!-- Mensajes: en rojo los errores, en verde las confirmaciones (venta registrada) -->
         <StackPanel Grid.Row="2" Margin="0,8,0,0">
+            <!-- Aviso grande mientras la caja está cerrada -->
+            <Border Background="Firebrick" Padding="8" Margin="0,0,0,8"
+                    Visibility="{Binding CajaAbierta, Converter={StaticResource VisibleSiFalse}}">
+                <TextBlock Text="CAJA CERRADA · Presione F11 para abrirla"
+                           Foreground="White" FontWeight="Bold" HorizontalAlignment="Center"/>
+            </Border>
             <TextBlock Text="{Binding Mensaje}"
                        Foreground="Firebrick" FontWeight="SemiBold"/>
             <TextBlock Text="{Binding MensajeExito}"
@@ -111,9 +121,11 @@
             <Button DockPanel.Dock="Left"  Content="F4  Eliminar"      Command="{Binding EliminarCommand}"/>
             <Button DockPanel.Dock="Left"  Content="F5  Cantidad"      Command="{Binding CambiarCantidadCommand}"/>
             <Button DockPanel.Dock="Left"  Content="F6  Descuento"     Command="{Binding AplicarDescuentoCommand}"/>
+            <Button DockPanel.Dock="Left"  Content="F7  Retiro/Ingreso" Command="{Binding RegistrarMovimientoCajaCommand}"/>
             <Button DockPanel.Dock="Left"  Content="F8  Reimprimir"    Command="{Binding ReimprimirUltimoTicketCommand}"/>
             <Button DockPanel.Dock="Left"  Content="ESC  Cancelar"     Command="{Binding CancelarVentaCommand}"/>
             <Button DockPanel.Dock="Right" Content="F12  Cerrar sesión" Command="{Binding CerrarSesionCommand}" Margin="0"/>
+            <Button DockPanel.Dock="Right" Content="{Binding TextoBotonCaja}" Command="{Binding AbrirOCerrarCajaCommand}"/>
             <Button DockPanel.Dock="Right" Content="F10  Contraseña"   Command="{Binding CambiarMiContrasenaCommand}"/>
             <Button DockPanel.Dock="Right" Content="F9  Usuarios"      Command="{Binding GestionarUsuariosCommand}"/>
         </DockPanel>

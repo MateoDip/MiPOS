@@ -14,6 +14,9 @@ public class MiPOSDbContext : DbContext
     public DbSet<Venta> Ventas => Set<Venta>();
     public DbSet<DetalleVenta> DetallesVenta => Set<DetalleVenta>();
     public DbSet<Usuario> Usuarios => Set<Usuario>();
+    public DbSet<Caja> Cajas => Set<Caja>();
+    public DbSet<TurnoCaja> TurnosCaja => Set<TurnoCaja>();
+    public DbSet<MovimientoCaja> MovimientosCaja => Set<MovimientoCaja>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

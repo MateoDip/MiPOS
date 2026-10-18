@@ -12,7 +12,12 @@ public partial class CajaVentana : Window
         DataContext = viewModel;
 
         // Al abrir, el cursor queda listo en el campo de código
-        Loaded += (_, _) => TxtCodigo.Focus();
+        // y se consulta si la caja está abierta (si no, se ofrece abrirla)
+        Loaded += (_, _) =>
+        {
+            TxtCodigo.Focus();
+            viewModel.CargarCajaCommand.Execute(null);
+        };
 
         // Después de cada acción (F1, F4, F5, ESC) el cursor vuelve al campo de código
         viewModel.AccionTerminada += () => TxtCodigo.Focus();

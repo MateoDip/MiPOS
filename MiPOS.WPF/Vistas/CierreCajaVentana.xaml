@@ -1,0 +1,120 @@
+<Window x:Class="MiPOS.WPF.Vistas.CierreCajaVentana"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:MiPOS.WPF.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:CierreCajaViewModel}"
+        Title="Cerrar caja"
+        Width="520" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        FontSize="16">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="VisibleSiEsTrue"/>
+    </Window.Resources>
+
+    <Window.InputBindings>
+        <KeyBinding Key="Enter"  Command="{Binding ConfirmarCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding CancelarCommand}"/>
+    </Window.InputBindings>
+
+    <StackPanel Margin="16">
+        <!-- Paso 1: conteo ciego (no se muestra cuánto debería haber) -->
+        <StackPanel Visibility="{Binding Contando, Converter={StaticResource VisibleSiEsTrue}}">
+            <TextBlock Text="Cuente el efectivo del cajón e ingrese el total." TextWrapping="Wrap"/>
+            <TextBlock Text="Efectivo contado" Margin="0,12,0,4"/>
+            <TextBox x:Name="TxtContado"
+                     FontSize="22" Padding="8"
+                     Text="{Binding EfectivoContado, UpdateSourceTrigger=PropertyChanged}">
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Enter" Command="{Binding ConfirmarCommand}"/>
+                </TextBox.InputBindings>
+            </TextBox>
+        </StackPanel>
+
+        <!-- Paso 2: resumen del turno con la diferencia -->
+        <StackPanel Visibility="{Binding Cerrada, Converter={StaticResource VisibleSiEsTrue}}">
+            <TextBlock Text="Caja cerrada" FontSize="22" FontWeight="Bold"/>
+
+            <TextBlock Margin="0,12,0,4" FontWeight="SemiBold">
+                <Run Text="Ventas:"/>
+                <Run Text="{Binding Resumen.CantidadVentas, Mode=OneWay}"/>
+                <Run Text="por"/>
+                <Run Text="{Binding Resumen.TotalVentas, Mode=OneWay, StringFormat='$ {0:N2}'}"/>
+            </TextBlock>
+            <ItemsControl ItemsSource="{Binding Resumen.VentasPorMedio}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid>
+                            <TextBlock>
+                                <Run Text="{Binding Medio, Mode=OneWay}"/>
+                                <Run Text="{Binding Cantidad, Mode=OneWay, StringFormat='({0})'}"/>
+                            </TextBlock>
+                            <TextBlock Text="{Binding Total, StringFormat='$ {0:N2}'}" HorizontalAlignment="Right"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="Efectivo" Margin="0,12,0,4" FontWeight="SemiBold"/>
+            <Grid>
+                <TextBlock Text="Inicial"/>
+                <TextBlock Text="{Binding Resumen.Turno.MontoInicial, StringFormat='$ {0:N2}'}" HorizontalAlignment="Right"/>
+            </Grid>
+            <Grid>
+                <TextBlock Text="Ventas en efectivo"/>
+                <TextBlock Text="{Binding Resumen.VentasEfectivo, Mode=OneWay, StringFormat='$ {0:N2}'}" HorizontalAlignment="Right"/>
+            </Grid>
+            <Grid>
+                <TextBlock Text="Ingresos"/>
+                <TextBlock Text="{Binding Resumen.Ingresos, Mode=OneWay, StringFormat='$ {0:N2}'}" HorizontalAlignment="Right"/>
+            </Grid>
+            <Grid>
+                <TextBlock Text="Retiros"/>
+                <TextBlock Text="{Binding Resumen.Retiros, Mode=OneWay, StringFormat='- $ {0:N2}'}" HorizontalAlignment="Right"/>
+            </Grid>
+            <Grid Margin="0,8,0,0">
+                <TextBlock Text="Esperado" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding Resumen.Turno.EfectivoEsperado, StringFormat='$ {0:N2}'}" HorizontalAlignment="Right" FontWeight="SemiBold"/>
+            </Grid>
+            <Grid>
+                <TextBlock Text="Contado" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding Resumen.Turno.EfectivoContado, StringFormat='$ {0:N2}'}" HorizontalAlignment="Right" FontWeight="SemiBold"/>
+            </Grid>
+
+            <TextBlock Text="{Binding TextoDiferencia}" FontSize="26" FontWeight="Bold"
+                       HorizontalAlignment="Right" Margin="0,8,0,0">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Foreground" Value="ForestGreen"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HayFaltante}" Value="True">
+                                <Setter Property="Foreground" Value="Firebrick"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+        </StackPanel>
+
+        <TextBlock Text="{Binding Mensaje}" TextWrapping="Wrap"
+                   Foreground="Firebrick" FontWeight="SemiBold" Margin="0,12,0,0"/>
+
+        <TextBlock Foreground="Gray" FontSize="13" Margin="0,8,0,0">
+            <TextBlock.Style>
+                <Style TargetType="TextBlock">
+                    <Setter Property="Text" Value="Enter: cerrar la caja     Esc: volver sin cerrar"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Cerrada}" Value="True">
+                            <Setter Property="Text" Value="Enter o Esc: salir (el comprobante se imprime solo)"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+    </StackPanel>
+</Window>

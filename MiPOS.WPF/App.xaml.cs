@@ -6,6 +6,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MiPOS.Datos;
 using MiPOS.Hardware.Impresion;
+using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Comprobantes;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Seguridad;
@@ -51,6 +52,9 @@ public partial class App : Application
         // un solo objeto compartido por toda la aplicación
         servicios.AddSingleton<Sesion>();
 
+        // Qué caja es esta PC (cada PC tiene su número)
+        servicios.AddTransient(_ => configuracion.GetSection("Caja").Get<OpcionesCaja>() ?? new OpcionesCaja());
+
         // Datos del comercio y de la impresora: cambian en cada instalación (appsettings.json)
         servicios.AddTransient(_ => configuracion.GetSection("Comercio").Get<DatosComercio>() ?? new DatosComercio());
         servicios.AddTransient(_ => configuracion.GetSection("Impresion").Get<OpcionesImpresion>() ?? new OpcionesImpresion());
@@ -68,6 +72,7 @@ public partial class App : Application
         servicios.AddTransient<VentaServicio>();
         servicios.AddTransient<UsuarioServicio>();
         servicios.AddTransient<TicketServicio>();
+        servicios.AddTransient<CajaServicio>();
         servicios.AddTransient<DialogoServicio>();
         servicios.AddTransient<LoginViewModel>();
         servicios.AddTransient<CajaViewModel>();
@@ -79,6 +84,8 @@ public partial class App : Application
         servicios.AddTransient<UsuariosViewModel>();
         servicios.AddTransient<UsuarioEdicionViewModel>();
         servicios.AddTransient<CambiarContrasenaViewModel>();
+        servicios.AddTransient<MovimientoCajaViewModel>();
+        servicios.AddTransient<CierreCajaViewModel>();
 
         _proveedor = servicios.BuildServiceProvider();
 

@@ -15,6 +15,7 @@ public enum Permiso
     GestionarStock,
     GestionarCompras,
     GestionarCajas,
+    RetirarEfectivo,
     ConfigurarHardware,
     ConfigurarFacturacion,
     ConfigurarSistema,

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using MiPOS.Datos;
 using MiPOS.Dominio.Entidades;
+using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Ventas;
 using MiPOS.Seguridad;
 
@@ -10,11 +11,13 @@ public class VentaServicio
 {
     private readonly IDbContextFactory<MiPOSDbContext> _fabrica;
     private readonly Sesion _sesion;
+    private readonly OpcionesCaja _opcionesCaja;
 
-    public VentaServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion)
+    public VentaServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion, OpcionesCaja opcionesCaja)
     {
         _fabrica = fabrica;
         _sesion = sesion;
+        _opcionesCaja = opcionesCaja;
     }
 
     public async Task<List<MedioPago>> ObtenerMediosPagoAsync()
@@ -77,6 +80,15 @@ public class VentaServicio
         };
 
         await using var contexto = await _fabrica.CreateDbContextAsync();
+
+        // Toda venta se cobra dentro de un turno abierto de la caja de esta PC
+        var turnoId = await contexto.TurnosCaja
+            .Where(t => t.Caja!.Numero == _opcionesCaja.Numero && t.FechaCierre == null)
+            .Select(t => (int?)t.Id)
+            .FirstOrDefaultAsync()
+            ?? throw new VentaInvalidaException("La caja está cerrada. Ábrala con F11 antes de cobrar.");
+
+        venta.TurnoCajaId = turnoId;
 
         var medio = await contexto.MediosPago
             .AsNoTracking()

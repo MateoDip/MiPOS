@@ -26,6 +26,10 @@ public class Venta
     public int UsuarioId { get; set; }
     public Usuario? Usuario { get; set; }
 
+    // Turno de caja en el que se cobró. Es null solo en las ventas anteriores al control de caja.
+    public int? TurnoCajaId { get; set; }
+    public TurnoCaja? TurnoCaja { get; set; }
+
     // Un único medio de pago por venta
     public int MedioPagoId { get; set; }
     public MedioPago? MedioPago { get; set; }

@@ -1,6 +1,7 @@
 ﻿using System.Windows;
 using Microsoft.Extensions.DependencyInjection;
 using MiPOS.Dominio.Entidades;
+using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Ventas;
 using MiPOS.Seguridad;
 using MiPOS.WPF.ViewModels;
@@ -38,6 +39,10 @@ public class DialogoServicio
     public string? PedirDescuento(decimal porcentajeActual)
         => PedirValor("Descuento", "Porcentaje de descuento sobre el total (0 para quitarlo):",
             porcentajeActual > 0 ? porcentajeActual.ToString("0.##") : string.Empty);
+
+    // Devuelve el texto escrito, o null si el usuario canceló
+    public string? PedirMontoInicial()
+        => PedirValor("Abrir caja", "Efectivo con el que empieza la caja (0 si está vacía):", string.Empty);
 
     private string? PedirValor(string titulo, string etiqueta, string valorInicial)
     {
@@ -80,6 +85,24 @@ public class DialogoServicio
         var ventana = new AutorizacionVentana(viewModel) { Owner = VentanaActiva() };
 
         return ventana.ShowDialog() == true ? viewModel.Autorizante : null;
+    }
+
+    // F7: retiro o ingreso de efectivo. Devuelve true si se registró.
+    public bool RegistrarMovimientoCaja()
+    {
+        var viewModel = _proveedor.GetRequiredService<MovimientoCajaViewModel>();
+
+        return new MovimientoCajaVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog() == true;
+    }
+
+    // F11: cierre de caja con arqueo. Devuelve el resumen si se cerró, o null si se volvió sin cerrar.
+    public ResumenTurno? CerrarCaja()
+    {
+        var viewModel = _proveedor.GetRequiredService<CierreCajaViewModel>();
+        new CierreCajaVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog();
+
+        // Se mira el resultado y no cómo se cerró la ventana: si se cerró la caja, ya está guardado
+        return viewModel.Resumen;
     }
 
     public void GestionarUsuarios()

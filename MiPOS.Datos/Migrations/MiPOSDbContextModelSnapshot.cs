@@ -22,6 +22,42 @@ namespace MiPOS.Datos.Migrations
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.Caja", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activa")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("Numero")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Numero")
+                        .IsUnique();
+
+                    b.ToTable("Cajas", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = 1,
+                            Activa = true,
+                            Nombre = "Caja 1",
+                            Numero = 1
+                        });
+                });
+
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Categoria", b =>
                 {
                     b.Property<int>("Id")
@@ -176,6 +212,49 @@ namespace MiPOS.Datos.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.MovimientoCaja", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("AutorizadoPorId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("Monto")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Motivo")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("int");
+
+                    b.Property<int>("TurnoCajaId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AutorizadoPorId");
+
+                    b.HasIndex("TurnoCajaId");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("MovimientosCaja", (string)null);
+                });
+
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Producto", b =>
                 {
                     b.Property<int>("Id")
@@ -243,6 +322,60 @@ namespace MiPOS.Datos.Migrations
                             Nombre = "Detergente",
                             Precio = 2200m
                         });
+                });
+
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.TurnoCaja", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CajaId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal?>("Diferencia")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("EfectivoContado")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("EfectivoEsperado")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("FechaApertura")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("FechaCierre")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("MontoInicial")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("UsuarioAperturaId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("UsuarioCierreId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CajaId")
+                        .IsUnique()
+                        .HasFilter("[FechaCierre] IS NULL");
+
+                    b.HasIndex("FechaApertura");
+
+                    b.HasIndex("UsuarioAperturaId");
+
+                    b.HasIndex("UsuarioCierreId");
+
+                    b.ToTable("TurnosCaja", (string)null);
                 });
 
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Usuario", b =>
@@ -328,6 +461,9 @@ namespace MiPOS.Datos.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int?>("TurnoCajaId")
+                        .HasColumnType("int");
+
                     b.Property<int>("UsuarioId")
                         .HasColumnType("int");
 
@@ -342,6 +478,8 @@ namespace MiPOS.Datos.Migrations
                     b.HasIndex("Fecha");
 
                     b.HasIndex("MedioPagoId");
+
+                    b.HasIndex("TurnoCajaId");
 
                     b.HasIndex("UsuarioId");
 
@@ -367,6 +505,32 @@ namespace MiPOS.Datos.Migrations
                     b.Navigation("Venta");
                 });
 
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.MovimientoCaja", b =>
+                {
+                    b.HasOne("MiPOS.Dominio.Entidades.Usuario", "AutorizadoPor")
+                        .WithMany()
+                        .HasForeignKey("AutorizadoPorId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("MiPOS.Dominio.Entidades.TurnoCaja", "TurnoCaja")
+                        .WithMany("Movimientos")
+                        .HasForeignKey("TurnoCajaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiPOS.Dominio.Entidades.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("AutorizadoPor");
+
+                    b.Navigation("TurnoCaja");
+
+                    b.Navigation("Usuario");
+                });
+
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Producto", b =>
                 {
                     b.HasOne("MiPOS.Dominio.Entidades.Categoria", "Categoria")
@@ -376,6 +540,32 @@ namespace MiPOS.Datos.Migrations
                         .IsRequired();
 
                     b.Navigation("Categoria");
+                });
+
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.TurnoCaja", b =>
+                {
+                    b.HasOne("MiPOS.Dominio.Entidades.Caja", "Caja")
+                        .WithMany()
+                        .HasForeignKey("CajaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiPOS.Dominio.Entidades.Usuario", "UsuarioApertura")
+                        .WithMany()
+                        .HasForeignKey("UsuarioAperturaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiPOS.Dominio.Entidades.Usuario", "UsuarioCierre")
+                        .WithMany()
+                        .HasForeignKey("UsuarioCierreId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Caja");
+
+                    b.Navigation("UsuarioApertura");
+
+                    b.Navigation("UsuarioCierre");
                 });
 
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Venta", b =>
@@ -391,6 +581,11 @@ namespace MiPOS.Datos.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("MiPOS.Dominio.Entidades.TurnoCaja", "TurnoCaja")
+                        .WithMany()
+                        .HasForeignKey("TurnoCajaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MiPOS.Dominio.Entidades.Usuario", "Usuario")
                         .WithMany()
                         .HasForeignKey("UsuarioId")
@@ -401,12 +596,19 @@ namespace MiPOS.Datos.Migrations
 
                     b.Navigation("MedioPago");
 
+                    b.Navigation("TurnoCaja");
+
                     b.Navigation("Usuario");
                 });
 
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Categoria", b =>
                 {
                     b.Navigation("Productos");
+                });
+
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.TurnoCaja", b =>
+                {
+                    b.Navigation("Movimientos");
                 });
 
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Venta", b =>
