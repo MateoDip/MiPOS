@@ -5,6 +5,8 @@ using MiPOS.Datos;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Seguridad;
+using MiPOS.Negocio.Comprobantes;
+using MiPOS.Hardware.Impresion;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -64,3 +66,64 @@ Console.WriteLine($"Administrador puede gestionar usuarios: {(Permisos.Tiene(Rol
 Console.WriteLine($"Administrador puede aplicar descuento: {(Permisos.Tiene(Rol.Administrador, Permiso.AplicarDescuento) ? "OK" : "ERROR")}");
 Console.WriteLine($"Cajero NO puede gestionar usuarios: {(!Permisos.Tiene(Rol.Cajero, Permiso.GestionarUsuarios) ? "OK" : "ERROR")}");
 Console.WriteLine($"Cajero NO puede aplicar descuento: {(!Permisos.Tiene(Rol.Cajero, Permiso.AplicarDescuento) ? "OK" : "ERROR")}");
+
+// --- Prueba 7: ticket (sin base de datos ni impresora) ---
+var ventaEjemplo = new Venta
+{
+    Id = 15,
+    Fecha = new DateTime(2026, 10, 12, 14, 32, 0),
+    Usuario = new Usuario { NombreCompleto = "Juan Pérez" },
+    MedioPago = new MedioPago { Nombre = "Efectivo", EsEfectivo = true },
+    Subtotal = 6500m, DescuentoPorcentaje = 12.5m, Descuento = 812.50m, Total = 5687.50m,
+    MontoRecibido = 6000m, Vuelto = 312.50m,
+    Detalles =
+    {
+        new DetalleVenta { NombreProducto = "Coca Cola 2.25L", Cantidad = 2, PrecioUnitario = 2500m, Subtotal = 5000m },
+        new DetalleVenta { NombreProducto = "Arroz largo fino doble carolina paquete familiar 1Kg", Cantidad = 1, PrecioUnitario = 1500m, Subtotal = 1500m }
+    }
+};
+var comercioEjemplo = new DatosComercio
+{
+    Nombre = "Almacén Don Pepe",
+    Direccion = "Av. Siempreviva 742 - CABA",
+    Cuit = "20-12345678-9",
+    MensajePie = "¡Gracias por su compra!"
+};
+
+foreach (var ancho in new[] { 42, 32 })
+{
+    Console.WriteLine($"\n=== Ticket de {ancho} caracteres ===");
+    var lineasTicket = TicketVenta.Armar(ventaEjemplo, comercioEjemplo, ancho, esReimpresion: ancho == 32);
+    foreach (var linea in lineasTicket)
+        Console.WriteLine($"|{linea.PadRight(ancho)}|");
+
+    Console.WriteLine($"Ninguna línea supera el ancho: {(lineasTicket.All(l => l.Length <= ancho) ? "OK" : "ERROR")}");
+    Console.WriteLine($"Dice NO VÁLIDO COMO FACTURA: {(lineasTicket.Any(l => l.Contains("NO VÁLIDO COMO FACTURA")) ? "OK" : "ERROR")}");
+}
+
+// --- Prueba 8: impresoras ---
+Console.WriteLine("\n=== Impresoras ===");
+var impresoraArchivo = new ImpresoraArchivo(new OpcionesImpresion { Modo = ModoImpresion.Archivo, CaracteresPorLinea = 42 });
+await impresoraArchivo.ImprimirAsync(TicketVenta.Armar(ventaEjemplo, comercioEjemplo, 42, false), "Venta 15");
+Console.WriteLine($"Ticket guardado en archivo: {(File.Exists(impresoraArchivo.UltimoArchivo) ? "OK" : "ERROR")} ({impresoraArchivo.UltimoArchivo})");
+
+try
+{
+    var impresoraInexistente = new ImpresoraWindows(new OpcionesImpresion { Impresora = "Impresora que no existe" });
+    await impresoraInexistente.ImprimirAsync(new[] { "prueba" }, "Prueba");
+    Console.WriteLine("Impresora inexistente da error: ERROR (no falló)");
+}
+catch (ImpresionException ex)
+{
+    Console.WriteLine($"Impresora inexistente da error: OK ({ex.Message})");
+}
+
+try
+{
+    new OpcionesImpresion { CaracteresPorLinea = 5 }.Validar();
+    Console.WriteLine("Configuración inválida da error: ERROR (no falló)");
+}
+catch (ImpresionException ex)
+{
+    Console.WriteLine($"Configuración inválida da error: OK ({ex.Message})");
+}

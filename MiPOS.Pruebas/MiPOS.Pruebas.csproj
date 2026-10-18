@@ -4,11 +4,12 @@
     <ProjectReference Include="..\MiPOS.Negocio\MiPOS.Negocio.csproj" />
     <ProjectReference Include="..\MiPOS.Datos\MiPOS.Datos.csproj" />
     <ProjectReference Include="..\MiPOS.Seguridad\MiPOS.Seguridad.csproj" />
+    <ProjectReference Include="..\MiPOS.Hardware\MiPOS.Hardware.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

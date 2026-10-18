@@ -4,10 +4,12 @@
     <ProjectReference Include="..\MiPOS.Negocio\MiPOS.Negocio.csproj" />
     <ProjectReference Include="..\MiPOS.Dominio\MiPOS.Dominio.csproj" />
     <ProjectReference Include="..\MiPOS.Seguridad\MiPOS.Seguridad.csproj" />
+    <ProjectReference Include="..\MiPOS.Hardware\MiPOS.Hardware.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="10.0.12" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.12" />
   </ItemGroup>

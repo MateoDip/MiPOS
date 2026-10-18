@@ -28,6 +28,18 @@ public class VentaServicio
             .ToListAsync();
     }
 
+    // La última venta del usuario conectado (para reimprimir su ticket). null si no tiene ventas.
+    public async Task<int?> ObtenerUltimaVentaIdAsync()
+    {
+        var usuario = _sesion.ExigirUsuario();
+
+        await using var contexto = await _fabrica.CreateDbContextAsync();
+
+        return await contexto.Ventas
+            .Where(v => v.UsuarioId == usuario.Id)
+            .MaxAsync(v => (int?)v.Id);
+    }
+
     /// <summary>
     /// Valida y guarda la venta con todos sus detalles.
     /// montoRecibido solo se usa en efectivo (en los demás medios se ignora).

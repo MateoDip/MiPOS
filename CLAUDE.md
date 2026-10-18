@@ -32,9 +32,10 @@ MiPOS es un sistema POS (punto de venta) para comercios minoristas, principalmen
 | `MiPOS.Negocio` | Servicios (`Servicios/`: `ProductoServicio`, `VentaServicio`, `UsuarioServicio`), lógica de venta (`Ventas/`: `Carrito`, `ItemCarrito`, `Cobro`) y de usuarios (`Usuarios/`) | Dominio, Datos, Seguridad |
 | `MiPOS.WPF` | `Vistas/`, `ViewModels/`, `Servicios/` (`DialogoServicio`, `LectorNumeros`), `App.xaml.cs` (inyección de dependencias e inicio de sesión), `appsettings.json` | Negocio, Dominio, Seguridad |
 | `MiPOS.Seguridad` | Hash de contraseñas (`HashContrasena`), permisos por rol (`Permiso`, `Permisos`), usuario conectado (`Sesion`) | Dominio |
-| `MiPOS.Pruebas` | Consola para pruebas manuales contra la base real | Negocio, Datos, Seguridad |
+| `MiPOS.Hardware` | Impresión de tickets (`Impresion/`: `IImpresoraTicket`, `ImpresoraWindows`, `ImpresoraArchivo`, `OpcionesImpresion`). Solo Windows (`net10.0-windows`, usa WPF) | Nada |
+| `MiPOS.Pruebas` | Consola para pruebas manuales contra la base real (`net10.0-windows`) | Negocio, Datos, Seguridad, Hardware |
 
-Más adelante se agregarán `MiPOS.Hardware` y `MiPOS.Facturacion` siguiendo el mismo criterio.
+Más adelante se agregará `MiPOS.Facturacion` siguiendo el mismo criterio.
 
 ## Decisiones ya tomadas
 
@@ -61,6 +62,9 @@ Más adelante se agregarán `MiPOS.Hardware` y `MiPOS.Facturacion` siguiendo el 
 - **Roles fijos en código:** `Rol` (Cajero, Administrador) es un enum en `MiPOS.Dominio`; qué permisos tiene cada rol se define en `MiPOS.Seguridad/Permisos`. No hay tabla de permisos configurables.
 - **Los permisos se verifican en `MiPOS.Negocio`**, no solo ocultando botones en la pantalla.
 - **Usuarios:** no se borran, se desactivan. Nunca puede quedar el sistema sin un administrador activo. No hay usuario ni contraseña por defecto: si no existen usuarios, el primer arranque pide crear el administrador. 5 intentos fallidos seguidos bloquean el inicio de sesión de ese usuario por 30 segundos.
+- **Impresión:** se usa la impresión común de Windows (cualquier impresora con driver), no comandos ESC/POS. Todo se configura por instalación en la sección `Impresion` de `appsettings.json` (`Modo` = `Windows` o `Archivo`, `Impresora` vacío = predeterminada, `AnchoPapelMm`, `CaracteresPorLinea`, `MargenMm`, `PapelContinuo`, `CarpetaArchivos`). En el repositorio queda `Modo = Archivo` para desarrollar sin impresora. `IImpresoraTicket` es una interfaz aprobada (dos implementaciones reales). `MiPOS.Hardware` no depende de ningún otro proyecto: recibe el ticket como líneas de texto.
+- **Ticket:** lo arma `TicketVenta` (en `MiPOS.Negocio/Comprobantes`) siempre desde la venta guardada en la base, con letra de ancho fijo y montos en formato es-AR. Mientras no haya facturación electrónica dice "NO VÁLIDO COMO FACTURA". Se imprime automáticamente al cobrar; si falla, la venta queda registrada igual y se avisa para reimprimir con F8 (que marca "REIMPRESIÓN").
+- **Datos del comercio:** el software se vende a distintos negocios, así que nombre, dirección, CUIT, teléfono y mensaje de pie van en la sección `Comercio` de `appsettings.json` (los vacíos no se imprimen). Más adelante pasarán a una pantalla de configuración.
 - **Montos ingresados por el cajero:** solo números con coma decimal y hasta 2 decimales; no se aceptan puntos (en `es-AR` "1500.50" se leería como 150050).
 
 ## Codificación de archivos
@@ -87,7 +91,7 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 
 **Flujo de venta:** caja → escanear/buscar → agregar al carrito → cambiar cantidad/eliminar → total → descuento opcional (requiere contraseña de administrador) → cobrar → medio de pago → comprobante (ticket fiscal o interno) → registrar venta → descontar stock si el módulo está activo → nueva venta.
 
-**Atajos de teclado de la caja:** F1 buscar, F2 producto, F3 cobrar, F4 eliminar, F5 cambiar cantidad, F6 descuento, F9 usuarios (solo administrador), F10 cambiar mi contraseña, F12 cerrar sesión, ESC cancelar.
+**Atajos de teclado de la caja:** F1 buscar, F2 producto, F3 cobrar, F4 eliminar, F5 cambiar cantidad, F6 descuento, F8 reimprimir último ticket, F9 usuarios (solo administrador), F10 cambiar mi contraseña, F12 cerrar sesión, ESC cancelar.
 
 **Medios de pago:** efectivo, débito, crédito, Mercado Pago, QR, transferencia. Un único medio por venta. En efectivo se calcula el vuelto.
 
@@ -99,7 +103,7 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 
 1. POS básico — **terminada**
 2. Usuarios (Cajero, Administrador, permisos, autorización por contraseña) — **terminada**
-3. Impresión (ticket, impresora térmica)
+3. Impresión (ticket, impresora térmica) — **terminada** (pendiente la prueba en pantalla junto con el testeo general)
 4. Control de caja
 5. Stock y compras
 6. Facturación (ARCA)
@@ -107,6 +111,12 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 8. Offline y sincronización
 9. Licenciamiento
 10. Multidioma (español y chino)
+
+## Estado de la Fase 3 (terminada)
+
+- [x] 3.1 Proyecto `MiPOS.Hardware`: impresión por Windows configurable e impresora de archivo para desarrollo
+- [x] 3.2 Ticket: `TicketVenta`, `TicketServicio`, datos del comercio y configuración en `appsettings.json`
+- [x] 3.3 Impresión automática al cobrar y reimpresión del último ticket (F8)
 
 ## Estado de la Fase 2 (terminada)
 

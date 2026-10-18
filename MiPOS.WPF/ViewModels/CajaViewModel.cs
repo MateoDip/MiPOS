@@ -2,6 +2,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MiPOS.Dominio.Entidades;
+using MiPOS.Hardware.Impresion;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Negocio.Ventas;
 using MiPOS.Seguridad;
@@ -18,15 +19,22 @@ public partial class CajaViewModel : ObservableObject
 
     private readonly ProductoServicio _productoServicio;
     private readonly UsuarioServicio _usuarioServicio;
+    private readonly VentaServicio _ventaServicio;
+    private readonly TicketServicio _ticketServicio;
+    private readonly IImpresoraTicket _impresora;
     private readonly DialogoServicio _dialogos;
     private readonly Sesion _sesion;
     private readonly Carrito _carrito = new();
 
     public CajaViewModel(ProductoServicio productoServicio, UsuarioServicio usuarioServicio,
-                         DialogoServicio dialogos, Sesion sesion)
+                         VentaServicio ventaServicio, TicketServicio ticketServicio,
+                         IImpresoraTicket impresora, DialogoServicio dialogos, Sesion sesion)
     {
         _productoServicio = productoServicio;
         _usuarioServicio = usuarioServicio;
+        _ventaServicio = ventaServicio;
+        _ticketServicio = ticketServicio;
+        _impresora = impresora;
         _dialogos = dialogos;
         _sesion = sesion;
     }
@@ -144,9 +152,59 @@ public partial class CajaViewModel : ObservableObject
                 ? $"Venta N° {venta.Id} registrada. Vuelto: $ {vuelto:N2}"
                 : $"Venta N° {venta.Id} registrada.";
             ActualizarTotales();
+
+            // Se imprime sin esperar: el cajero puede empezar la próxima venta mientras sale el ticket.
+            // Si falla, la venta ya está registrada igual y se avisa para reimprimir con F8.
+            _ = ImprimirTicketAsync(venta.Id, esReimpresion: false);
         }
 
         AccionTerminada?.Invoke();
+    }
+
+    // F8: reimprimir el ticket de la última venta del usuario conectado
+    [RelayCommand]
+    private async Task ReimprimirUltimoTicketAsync()
+    {
+        MensajeExito = string.Empty;
+        try
+        {
+            var ventaId = await _ventaServicio.ObtenerUltimaVentaIdAsync();
+
+            if (ventaId is null)
+                Mensaje = "No tiene ventas para reimprimir.";
+            else
+            {
+                Mensaje = string.Empty;
+                await ImprimirTicketAsync(ventaId.Value, esReimpresion: true);
+            }
+        }
+        catch (Exception)
+        {
+            Mensaje = "Error al buscar la última venta. Verifique la conexión con la base de datos.";
+        }
+
+        AccionTerminada?.Invoke();
+    }
+
+    // Arma el ticket desde la venta guardada y lo manda a la impresora configurada
+    private async Task ImprimirTicketAsync(int ventaId, bool esReimpresion)
+    {
+        try
+        {
+            var lineas = await _ticketServicio.ArmarAsync(ventaId, _impresora.CaracteresPorLinea, esReimpresion);
+            await _impresora.ImprimirAsync(lineas, $"Venta {ventaId}");
+
+            if (esReimpresion)
+                MensajeExito = $"Ticket de la venta N° {ventaId} reimpreso.";
+        }
+        catch (ImpresionException ex)
+        {
+            Mensaje = $"No se pudo imprimir el ticket de la venta N° {ventaId}. {ex.Message} Use F8 para reimprimir.";
+        }
+        catch (Exception)
+        {
+            Mensaje = $"No se pudo imprimir el ticket de la venta N° {ventaId}. Use F8 para reimprimir.";
+        }
     }
 
     // F4: eliminar el producto seleccionado

@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MiPOS.Datos;
+using MiPOS.Hardware.Impresion;
+using MiPOS.Negocio.Comprobantes;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Seguridad;
 using MiPOS.WPF.Servicios;
@@ -49,9 +51,23 @@ public partial class App : Application
         // un solo objeto compartido por toda la aplicación
         servicios.AddSingleton<Sesion>();
 
+        // Datos del comercio y de la impresora: cambian en cada instalación (appsettings.json)
+        servicios.AddTransient(_ => configuracion.GetSection("Comercio").Get<DatosComercio>() ?? new DatosComercio());
+        servicios.AddTransient(_ => configuracion.GetSection("Impresion").Get<OpcionesImpresion>() ?? new OpcionesImpresion());
+
+        // Qué impresora se usa depende de Impresion:Modo
+        servicios.AddTransient<IImpresoraTicket>(proveedor =>
+        {
+            var opciones = proveedor.GetRequiredService<OpcionesImpresion>();
+            return opciones.Modo == ModoImpresion.Archivo
+                ? new ImpresoraArchivo(opciones)
+                : new ImpresoraWindows(opciones);
+        });
+
         servicios.AddTransient<ProductoServicio>();
         servicios.AddTransient<VentaServicio>();
         servicios.AddTransient<UsuarioServicio>();
+        servicios.AddTransient<TicketServicio>();
         servicios.AddTransient<DialogoServicio>();
         servicios.AddTransient<LoginViewModel>();
         servicios.AddTransient<CajaViewModel>();

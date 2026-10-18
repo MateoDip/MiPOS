@@ -19,6 +19,7 @@
         <KeyBinding Key="F4"     Command="{Binding EliminarCommand}"/>
         <KeyBinding Key="F5"     Command="{Binding CambiarCantidadCommand}"/>
         <KeyBinding Key="F6"     Command="{Binding AplicarDescuentoCommand}"/>
+        <KeyBinding Key="F8"     Command="{Binding ReimprimirUltimoTicketCommand}"/>
         <KeyBinding Key="F9"     Command="{Binding GestionarUsuariosCommand}"/>
         <!-- F10 no se puede poner acá: Windows la usa para el menú. Se maneja en CajaVentana.xaml.cs -->
         <KeyBinding Key="F12"    Command="{Binding CerrarSesionCommand}"/>
@@ -110,6 +111,7 @@
             <Button DockPanel.Dock="Left"  Content="F4  Eliminar"      Command="{Binding EliminarCommand}"/>
             <Button DockPanel.Dock="Left"  Content="F5  Cantidad"      Command="{Binding CambiarCantidadCommand}"/>
             <Button DockPanel.Dock="Left"  Content="F6  Descuento"     Command="{Binding AplicarDescuentoCommand}"/>
+            <Button DockPanel.Dock="Left"  Content="F8  Reimprimir"    Command="{Binding ReimprimirUltimoTicketCommand}"/>
             <Button DockPanel.Dock="Left"  Content="ESC  Cancelar"     Command="{Binding CancelarVentaCommand}"/>
             <Button DockPanel.Dock="Right" Content="F12  Cerrar sesión" Command="{Binding CerrarSesionCommand}" Margin="0"/>
             <Button DockPanel.Dock="Right" Content="F10  Contraseña"   Command="{Binding CambiarMiContrasenaCommand}"/>
