@@ -118,9 +118,21 @@ public class VentaServicio
             venta.Vuelto = Cobro.CalcularVuelto(total, montoRecibido.Value);
         }
 
-        // Un solo SaveChanges: se guarda la venta completa con sus detalles, o no se guarda nada
+        // Todo en una transacción: la venta con sus detalles y el descuento de stock
+        // se guardan juntos, o no se guarda nada
+        await using var transaccion = await contexto.Database.BeginTransactionAsync();
+
         contexto.Ventas.Add(venta);
+        await contexto.SaveChangesAsync(); // acá la venta recibe su Id
+
+        // Se descuenta aunque no alcance el stock: si el cliente tiene el producto
+        // en la mano, existe. El stock queda negativo y aparece en las alertas.
+        foreach (var detalle in venta.Detalles)
+            await StockServicio.RegistrarMovimientoAsync(contexto, detalle.ProductoId, TipoMovimientoStock.Venta,
+                -detalle.Cantidad, motivo: null, usuario.Id, venta.Id);
+
         await contexto.SaveChangesAsync();
+        await transaccion.CommitAsync();
 
         return venta;
     }

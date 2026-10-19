@@ -41,4 +41,8 @@ public class MovimientoStock
     // La venta que lo originó (solo en los movimientos de tipo Venta)
     public int? VentaId { get; set; }
     public Venta? Venta { get; set; }
+
+    // La compra que lo originó (solo en los movimientos de tipo Compra)
+    public int? CompraId { get; set; }
+    public Compra? Compra { get; set; }
 }

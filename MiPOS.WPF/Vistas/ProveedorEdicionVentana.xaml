@@ -1,0 +1,42 @@
+<Window x:Class="MiPOS.WPF.Vistas.ProveedorEdicionVentana"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:MiPOS.WPF.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:ProveedorEdicionViewModel}"
+        Title="{Binding Titulo}"
+        Width="440" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        FontSize="16">
+
+    <Window.InputBindings>
+        <KeyBinding Key="Enter"  Command="{Binding GuardarCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding CancelarCommand}"/>
+    </Window.InputBindings>
+
+    <StackPanel Margin="16">
+        <TextBlock Text="Nombre o razón social" Margin="0,0,0,4"/>
+        <TextBox x:Name="TxtNombre" Padding="6"
+                 MaxLength="{Binding LargoMaximoNombre}"
+                 Text="{Binding Nombre, UpdateSourceTrigger=PropertyChanged}"/>
+
+        <TextBlock Text="CUIT (opcional, con o sin guiones)" Margin="0,12,0,4"/>
+        <TextBox Padding="6" MaxLength="13"
+                 Text="{Binding Cuit, UpdateSourceTrigger=PropertyChanged}"/>
+
+        <TextBlock Text="Teléfono (opcional)" Margin="0,12,0,4"/>
+        <TextBox Padding="6"
+                 MaxLength="{Binding LargoMaximoTelefono}"
+                 Text="{Binding Telefono, UpdateSourceTrigger=PropertyChanged}"/>
+
+        <TextBlock Text="{Binding Mensaje}" TextWrapping="Wrap"
+                   Foreground="Firebrick" FontWeight="SemiBold" Margin="0,12,0,0"/>
+
+        <TextBlock Text="Enter: guardar     Esc: cancelar"
+                   Foreground="Gray" FontSize="13" Margin="0,8,0,0"/>
+    </StackPanel>
+</Window>

@@ -13,7 +13,8 @@ public class Producto
     // Solo se modifica a través de un MovimientoStock.
     public int Stock { get; set; }
 
-    // Por debajo de este valor el producto aparece en las alertas (0 = sin alerta)
+    // Cuando el stock llega a este valor (o menos) el producto aparece en las alertas.
+    // 0 = sin alerta por mínimo (igual aparece si el stock queda negativo).
     public int StockMinimo { get; set; }
 
     public int CategoriaId { get; set; }

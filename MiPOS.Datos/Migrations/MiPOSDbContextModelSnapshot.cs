@@ -102,6 +102,81 @@ namespace MiPOS.Datos.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.Compra", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("NumeroComprobante")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("ProveedorId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Fecha");
+
+                    b.HasIndex("ProveedorId");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.ToTable("Compras", (string)null);
+                });
+
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.DetalleCompra", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Cantidad")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CompraId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("CostoUnitario")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("NombreProducto")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("ProductoId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CompraId");
+
+                    b.HasIndex("ProductoId");
+
+                    b.ToTable("DetallesCompra", (string)null);
+                });
+
             modelBuilder.Entity("MiPOS.Dominio.Entidades.DetalleVenta", b =>
                 {
                     b.Property<int>("Id")
@@ -266,6 +341,9 @@ namespace MiPOS.Datos.Migrations
                     b.Property<int>("Cantidad")
                         .HasColumnType("int");
 
+                    b.Property<int?>("CompraId")
+                        .HasColumnType("int");
+
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("datetime2");
 
@@ -286,6 +364,8 @@ namespace MiPOS.Datos.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CompraId");
 
                     b.HasIndex("UsuarioId");
 
@@ -375,6 +455,38 @@ namespace MiPOS.Datos.Migrations
                             Stock = 0,
                             StockMinimo = 0
                         });
+                });
+
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.Proveedor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Cuit")
+                        .HasMaxLength(11)
+                        .HasColumnType("nvarchar(11)");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Telefono")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Nombre")
+                        .IsUnique();
+
+                    b.ToTable("Proveedores", (string)null);
                 });
 
             modelBuilder.Entity("MiPOS.Dominio.Entidades.TurnoCaja", b =>
@@ -539,6 +651,44 @@ namespace MiPOS.Datos.Migrations
                     b.ToTable("Ventas", (string)null);
                 });
 
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.Compra", b =>
+                {
+                    b.HasOne("MiPOS.Dominio.Entidades.Proveedor", "Proveedor")
+                        .WithMany()
+                        .HasForeignKey("ProveedorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiPOS.Dominio.Entidades.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Proveedor");
+
+                    b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.DetalleCompra", b =>
+                {
+                    b.HasOne("MiPOS.Dominio.Entidades.Compra", "Compra")
+                        .WithMany("Detalles")
+                        .HasForeignKey("CompraId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MiPOS.Dominio.Entidades.Producto", "Producto")
+                        .WithMany()
+                        .HasForeignKey("ProductoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Compra");
+
+                    b.Navigation("Producto");
+                });
+
             modelBuilder.Entity("MiPOS.Dominio.Entidades.DetalleVenta", b =>
                 {
                     b.HasOne("MiPOS.Dominio.Entidades.Producto", "Producto")
@@ -586,6 +736,11 @@ namespace MiPOS.Datos.Migrations
 
             modelBuilder.Entity("MiPOS.Dominio.Entidades.MovimientoStock", b =>
                 {
+                    b.HasOne("MiPOS.Dominio.Entidades.Compra", "Compra")
+                        .WithMany()
+                        .HasForeignKey("CompraId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("MiPOS.Dominio.Entidades.Producto", "Producto")
                         .WithMany()
                         .HasForeignKey("ProductoId")
@@ -602,6 +757,8 @@ namespace MiPOS.Datos.Migrations
                         .WithMany()
                         .HasForeignKey("VentaId")
                         .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Compra");
 
                     b.Navigation("Producto");
 
@@ -683,6 +840,11 @@ namespace MiPOS.Datos.Migrations
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Categoria", b =>
                 {
                     b.Navigation("Productos");
+                });
+
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.Compra", b =>
+                {
+                    b.Navigation("Detalles");
                 });
 
             modelBuilder.Entity("MiPOS.Dominio.Entidades.TurnoCaja", b =>

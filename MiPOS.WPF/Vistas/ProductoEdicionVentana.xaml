@@ -1,0 +1,69 @@
+<Window x:Class="MiPOS.WPF.Vistas.ProductoEdicionVentana"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:MiPOS.WPF.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:ProductoEdicionViewModel}"
+        Title="{Binding Titulo}"
+        Width="520" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        FontSize="16">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="VisibleSiEsTrue"/>
+    </Window.Resources>
+
+    <Window.InputBindings>
+        <KeyBinding Key="Enter"  Command="{Binding GuardarCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding CancelarCommand}"/>
+    </Window.InputBindings>
+
+    <StackPanel Margin="16">
+        <TextBlock Text="Código de barras (escanee el producto)" Margin="0,0,0,4"/>
+        <DockPanel>
+            <!-- Para artículos sin código de barras -->
+            <Button DockPanel.Dock="Right" Content="Código interno" Padding="12,4" Margin="8,0,0,0"
+                    Command="{Binding GenerarCodigoInternoCommand}"/>
+            <TextBox x:Name="TxtCodigo" Padding="6"
+                     MaxLength="{Binding LargoMaximoCodigo}"
+                     Text="{Binding CodigoBarras, UpdateSourceTrigger=PropertyChanged}"/>
+        </DockPanel>
+
+        <TextBlock Text="Nombre" Margin="0,12,0,4"/>
+        <TextBox x:Name="TxtNombre" Padding="6"
+                 MaxLength="{Binding LargoMaximoNombre}"
+                 Text="{Binding Nombre, UpdateSourceTrigger=PropertyChanged}"/>
+
+        <TextBlock Text="Categoría" Margin="0,12,0,4"/>
+        <DockPanel>
+            <Button DockPanel.Dock="Right" Content="Nueva categoría" Padding="12,4" Margin="8,0,0,0"
+                    Command="{Binding NuevaCategoriaCommand}"/>
+            <ComboBox ItemsSource="{Binding Categorias}"
+                      SelectedItem="{Binding CategoriaSeleccionada}"
+                      DisplayMemberPath="Nombre"
+                      Padding="6"/>
+        </DockPanel>
+
+        <TextBlock Text="Precio de venta" Margin="0,12,0,4"/>
+        <TextBox Padding="6" Text="{Binding Precio, UpdateSourceTrigger=PropertyChanged}"/>
+
+        <TextBlock Text="Stock mínimo (avisa cuando llega a este valor; 0 = sin aviso)" TextWrapping="Wrap" Margin="0,12,0,4"/>
+        <TextBox Padding="6" Text="{Binding StockMinimo, UpdateSourceTrigger=PropertyChanged}"/>
+
+        <!-- Solo al crear: después el stock se cambia con "Ajustar stock" -->
+        <StackPanel Visibility="{Binding EsNuevo, Converter={StaticResource VisibleSiEsTrue}}">
+            <TextBlock Text="Stock inicial (unidades que hay hoy)" Margin="0,12,0,4"/>
+            <TextBox Padding="6" Text="{Binding StockInicial, UpdateSourceTrigger=PropertyChanged}"/>
+        </StackPanel>
+
+        <TextBlock Text="{Binding Mensaje}" TextWrapping="Wrap"
+                   Foreground="Firebrick" FontWeight="SemiBold" Margin="0,12,0,0"/>
+
+        <TextBlock Text="Precio con coma para los centavos (ej: 1500,50).     Enter: guardar     Esc: cancelar"
+                   TextWrapping="Wrap" Foreground="Gray" FontSize="13" Margin="0,8,0,0"/>
+    </StackPanel>
+</Window>

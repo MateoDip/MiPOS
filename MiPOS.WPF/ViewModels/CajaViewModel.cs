@@ -25,6 +25,7 @@ public partial class CajaViewModel : ObservableObject
     private readonly VentaServicio _ventaServicio;
     private readonly TicketServicio _ticketServicio;
     private readonly CajaServicio _cajaServicio;
+    private readonly StockServicio _stockServicio;
     private readonly IImpresoraTicket _impresora;
     private readonly DialogoServicio _dialogos;
     private readonly Sesion _sesion;
@@ -32,13 +33,14 @@ public partial class CajaViewModel : ObservableObject
 
     public CajaViewModel(ProductoServicio productoServicio, UsuarioServicio usuarioServicio,
                          VentaServicio ventaServicio, TicketServicio ticketServicio, CajaServicio cajaServicio,
-                         IImpresoraTicket impresora, DialogoServicio dialogos, Sesion sesion)
+                         StockServicio stockServicio, IImpresoraTicket impresora, DialogoServicio dialogos, Sesion sesion)
     {
         _productoServicio = productoServicio;
         _usuarioServicio = usuarioServicio;
         _ventaServicio = ventaServicio;
         _ticketServicio = ticketServicio;
         _cajaServicio = cajaServicio;
+        _stockServicio = stockServicio;
         _impresora = impresora;
         _dialogos = dialogos;
         _sesion = sesion;
@@ -97,6 +99,10 @@ public partial class CajaViewModel : ObservableObject
     [ObservableProperty]
     private string mensajeExito = string.Empty;
 
+    // Solo para quien gestiona el stock: "3 productos con stock bajo · Ctrl+P" (vacío si no hay)
+    [ObservableProperty]
+    private string avisoStock = string.Empty;
+
     // Cuando cambia el producto seleccionado, se re-evalúa si se puede eliminar o cambiar cantidad
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(EliminarCommand))]
@@ -131,15 +137,27 @@ public partial class CajaViewModel : ObservableObject
                 return;
             }
 
-            ItemSeleccionado = _carrito.Agregar(producto);
-            Mensaje = string.Empty;
-            MensajeExito = string.Empty;
-            ActualizarTotales();
+            AgregarAlCarrito(producto);
         }
         catch (Exception)
         {
             Mensaje = "Error al buscar el producto. Verifique la conexión con la base de datos.";
         }
+    }
+
+    private void AgregarAlCarrito(Producto producto)
+    {
+        var item = _carrito.Agregar(producto);
+        ItemSeleccionado = item;
+        MensajeExito = string.Empty;
+
+        // Se vende igual (el producto existe si el cliente lo tiene en la mano),
+        // pero se avisa para que alguien revise el stock cargado
+        Mensaje = producto.Stock < item.Cantidad
+            ? $"Atención: según el sistema hay {producto.Stock} unidades de {producto.Nombre}. Se vende igual; avise al encargado para revisar el stock."
+            : string.Empty;
+
+        ActualizarTotales();
     }
 
     // F1: buscar un producto por nombre y agregarlo
@@ -156,12 +174,7 @@ public partial class CajaViewModel : ObservableObject
         var producto = _dialogos.BuscarProducto();
 
         if (producto is not null)
-        {
-            ItemSeleccionado = _carrito.Agregar(producto);
-            Mensaje = string.Empty;
-            MensajeExito = string.Empty;
-            ActualizarTotales();
-        }
+            AgregarAlCarrito(producto);
 
         AccionTerminada?.Invoke();
     }
@@ -196,6 +209,7 @@ public partial class CajaViewModel : ObservableObject
             // Se imprime sin esperar: el cajero puede empezar la próxima venta mientras sale el ticket.
             // Si falla, la venta ya está registrada igual y se avisa para reimprimir con F8.
             _ = ImprimirTicketAsync(venta.Id, esReimpresion: false);
+            _ = ActualizarAvisoStockAsync();
         }
 
         AccionTerminada?.Invoke();
@@ -255,6 +269,8 @@ public partial class CajaViewModel : ObservableObject
         {
             NombreCaja = (await _cajaServicio.ObtenerCajaAsync()).Nombre;
             Turno = await _cajaServicio.ObtenerTurnoAbiertoAsync();
+
+            await ActualizarAvisoStockAsync();
 
             if (!CajaAbierta)
                 await AbrirCajaAsync();
@@ -510,6 +526,56 @@ public partial class CajaViewModel : ObservableObject
     }
 
     private bool PuedeGestionarUsuarios() => _sesion.Tiene(Permiso.GestionarUsuarios);
+
+    // Ctrl+P: productos y stock (solo quien tiene el permiso)
+    [RelayCommand(CanExecute = nameof(PuedeGestionarProductos))]
+    private async Task GestionarProductosAsync()
+    {
+        _dialogos.GestionarProductos(soloStockBajo: false);
+        await ActualizarAvisoStockAsync();
+        AccionTerminada?.Invoke();
+    }
+
+    private bool PuedeGestionarProductos() => _sesion.Tiene(Permiso.GestionarProductos);
+
+    // Ctrl+M: compras de mercadería (solo quien tiene el permiso)
+    [RelayCommand(CanExecute = nameof(PuedeGestionarCompras))]
+    private async Task GestionarComprasAsync()
+    {
+        _dialogos.GestionarCompras();
+
+        // Una compra puede sacar productos de las alertas
+        await ActualizarAvisoStockAsync();
+        AccionTerminada?.Invoke();
+    }
+
+    private bool PuedeGestionarCompras() => _sesion.Tiene(Permiso.GestionarCompras);
+
+    // El aviso de stock bajo solo lo ve quien puede corregirlo
+    private async Task ActualizarAvisoStockAsync()
+    {
+        if (!_sesion.Tiene(Permiso.GestionarStock))
+        {
+            AvisoStock = string.Empty;
+            return;
+        }
+
+        try
+        {
+            var cantidad = await _stockServicio.ContarBajoMinimoAsync();
+            AvisoStock = cantidad switch
+            {
+                0 => string.Empty,
+                1 => "1 producto con stock bajo · Ctrl+P",
+                _ => $"{cantidad} productos con stock bajo · Ctrl+P"
+            };
+        }
+        catch (Exception)
+        {
+            // El aviso no es imprescindible: si falla la consulta, no se muestra
+            AvisoStock = string.Empty;
+        }
+    }
 
     // F10: cambiar mi contraseña
     [RelayCommand]

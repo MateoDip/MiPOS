@@ -1,0 +1,38 @@
+<Window x:Class="MiPOS.WPF.Vistas.CompraItemVentana"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:MiPOS.WPF.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:CompraItemViewModel}"
+        Title="Producto de la compra"
+        Width="440" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        FontSize="16">
+
+    <Window.InputBindings>
+        <KeyBinding Key="Enter"  Command="{Binding AceptarCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding CancelarCommand}"/>
+    </Window.InputBindings>
+
+    <StackPanel Margin="16">
+        <TextBlock Text="{Binding NombreProducto}" FontWeight="Bold" TextWrapping="Wrap"/>
+
+        <TextBlock Text="Cantidad recibida (unidades)" Margin="0,12,0,4"/>
+        <TextBox x:Name="TxtCantidad" FontSize="22" Padding="8"
+                 Text="{Binding Cantidad, UpdateSourceTrigger=PropertyChanged}"/>
+
+        <TextBlock Text="Costo por unidad" Margin="0,12,0,4"/>
+        <TextBox FontSize="22" Padding="8"
+                 Text="{Binding Costo, UpdateSourceTrigger=PropertyChanged}"/>
+
+        <TextBlock Text="{Binding Mensaje}" TextWrapping="Wrap"
+                   Foreground="Firebrick" FontWeight="SemiBold" Margin="0,12,0,0"/>
+
+        <TextBlock Text="Tab: siguiente campo     Enter: aceptar     Esc: cancelar"
+                   Foreground="Gray" FontSize="13" Margin="0,8,0,0"/>
+    </StackPanel>
+</Window>

@@ -44,6 +44,10 @@ public class DialogoServicio
     public string? PedirMontoInicial()
         => PedirValor("Abrir caja", "Efectivo con el que empieza la caja (0 si está vacía):", string.Empty);
 
+    // Devuelve el texto escrito, o null si el usuario canceló
+    public string? PedirNombreCategoria()
+        => PedirValor("Nueva categoría", "Nombre de la categoría:", string.Empty);
+
     private string? PedirValor(string titulo, string etiqueta, string valorInicial)
     {
         var viewModel = _proveedor.GetRequiredService<IngresarValorViewModel>();
@@ -141,6 +145,99 @@ public class DialogoServicio
         viewModel.IniciarRestablecer(usuario);
 
         return new CambiarContrasenaVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog() == true;
+    }
+
+    // Ctrl+P: productos y stock. soloStockBajo abre directamente con el filtro de alertas.
+    public void GestionarProductos(bool soloStockBajo)
+    {
+        var viewModel = _proveedor.GetRequiredService<ProductosViewModel>();
+        viewModel.Iniciar(soloStockBajo);
+
+        new ProductosVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog();
+    }
+
+    // producto null = alta de un producto nuevo. Devuelve el producto guardado, o null si se canceló.
+    public Producto? EditarProducto(Producto? producto)
+    {
+        var viewModel = _proveedor.GetRequiredService<ProductoEdicionViewModel>();
+        if (producto is null)
+            viewModel.IniciarNuevo();
+        else
+            viewModel.IniciarEdicion(producto);
+
+        return new ProductoEdicionVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog() == true
+            ? viewModel.ProductoGuardado
+            : null;
+    }
+
+    // Devuelve true si se ajustó
+    public bool AjustarStock(Producto producto)
+    {
+        var viewModel = _proveedor.GetRequiredService<AjusteStockViewModel>();
+        viewModel.Iniciar(producto);
+
+        return new AjusteStockVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog() == true;
+    }
+
+    public void VerMovimientosStock(Producto producto)
+    {
+        var viewModel = _proveedor.GetRequiredService<MovimientosStockViewModel>();
+        viewModel.Iniciar(producto);
+
+        new MovimientosStockVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog();
+    }
+
+    // Ctrl+M: compras de mercadería
+    public void GestionarCompras()
+    {
+        var viewModel = _proveedor.GetRequiredService<ComprasViewModel>();
+        viewModel.Iniciar();
+
+        new ComprasVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog();
+    }
+
+    // Devuelve la compra registrada, o null si se canceló
+    public Compra? CargarCompra()
+    {
+        var viewModel = _proveedor.GetRequiredService<CompraViewModel>();
+        viewModel.Iniciar();
+
+        return new CompraVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog() == true
+            ? viewModel.CompraRegistrada
+            : null;
+    }
+
+    // Cantidad y costo de un producto de la compra. null si se canceló.
+    public (int Cantidad, decimal Costo)? PedirItemCompra(string nombreProducto, int? cantidadActual, decimal? costoSugerido)
+    {
+        var viewModel = _proveedor.GetRequiredService<CompraItemViewModel>();
+        viewModel.Iniciar(nombreProducto, cantidadActual, costoSugerido);
+
+        return new CompraItemVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog() == true
+            ? (viewModel.CantidadElegida, viewModel.CostoElegido)
+            : null;
+    }
+
+    public void GestionarProveedores()
+    {
+        var viewModel = _proveedor.GetRequiredService<ProveedoresViewModel>();
+        viewModel.Iniciar();
+
+        new ProveedoresVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog();
+    }
+
+    // proveedor null = alta. Devuelve el proveedor guardado, o null si se canceló.
+    public Proveedor? EditarProveedor(Proveedor? proveedor)
+    {
+        var viewModel = _proveedor.GetRequiredService<ProveedorEdicionViewModel>();
+        if (proveedor is null)
+            viewModel.IniciarNuevo();
+        else
+            viewModel.IniciarEdicion(proveedor);
+
+        return new ProveedorEdicionVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog() == true
+            ? viewModel.ProveedorGuardado
+            : null;
     }
 
     // El diálogo nuevo queda encima de la ventana que se está usando

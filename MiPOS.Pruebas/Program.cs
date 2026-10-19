@@ -9,6 +9,9 @@ using MiPOS.Negocio.Comprobantes;
 using MiPOS.Hardware.Impresion;
 using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Ventas;
+using MiPOS.Negocio.Productos;
+using MiPOS.Negocio.Compras;
+using MiPOS.Negocio.Comun;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -16,7 +19,7 @@ var opciones = new DbContextOptionsBuilder<MiPOSDbContext>()
     .UseSqlServer(@"Server=(localdb)\MSSQLLocalDB;Database=MiPOS;Trusted_Connection=True;TrustServerCertificate=True")
     .Options;
 
-var servicio = new ProductoServicio(new PooledDbContextFactory<MiPOSDbContext>(opciones));
+var servicio = new ProductoServicio(new PooledDbContextFactory<MiPOSDbContext>(opciones), new Sesion());
 // --- Prueba 1: código que existe ---
 Console.WriteLine("=== Buscar código 7795678 ===");
 var producto = await servicio.BuscarPorCodigoAsync("7795678");
@@ -153,7 +156,10 @@ await using (var contexto = await fabrica.CreateDbContextAsync())
     if (administrador is null)
         Console.WriteLine("No hay un administrador activo: se saltean las pruebas de caja.");
     else
+    {
         await ProbarCajaAsync(fabrica, administrador);
+        await ProbarProductosYStockAsync(fabrica, administrador);
+    }
 
     // La caja de pruebas queda desactivada para que no aparezca en el sistema
     await contexto.Cajas.Where(c => c.Numero == 99).ExecuteUpdateAsync(s => s.SetProperty(c => c.Activa, false));
@@ -166,7 +172,7 @@ static async Task ProbarCajaAsync(PooledDbContextFactory<MiPOSDbContext> fabrica
     var opcionesCaja = new OpcionesCaja { Numero = 99 };
     var cajaServicio = new CajaServicio(fabrica, sesion, opcionesCaja);
     var ventaServicio = new VentaServicio(fabrica, sesion, opcionesCaja);
-    var productoServicio = new ProductoServicio(fabrica);
+    var productoServicio = new ProductoServicio(fabrica, sesion);
 
     // Si quedó abierta de una prueba anterior que falló, se cierra
     if (await cajaServicio.ObtenerTurnoAbiertoAsync() is not null)
@@ -183,9 +189,21 @@ static async Task ProbarCajaAsync(PooledDbContextFactory<MiPOSDbContext> fabrica
 
     await Esperar<CajaInvalidaException>("Abrir dos veces da error", () => cajaServicio.AbrirTurnoAsync(0));
 
+    var stockAntes = await LeerStockAsync(fabrica, carrito.Items[0].ProductoId);
+
     var venta1 = await ventaServicio.RegistrarAsync(carrito, 1, 3000m);   // efectivo
     var venta2 = await ventaServicio.RegistrarAsync(carrito, 2, null);    // débito
     Console.WriteLine($"Las ventas quedan en el turno: {(venta1.TurnoCajaId == turno.Id && venta2.TurnoCajaId == turno.Id ? "OK" : "ERROR")}");
+
+    // Cada venta descuenta 1 unidad y deja su movimiento de stock
+    var stockDespues = await LeerStockAsync(fabrica, carrito.Items[0].ProductoId);
+    Console.WriteLine($"Las ventas descuentan stock ({stockAntes} -> {stockDespues}): {(stockDespues == stockAntes - 2 ? "OK" : "ERROR")}");
+    await using (var contexto = await fabrica.CreateDbContextAsync())
+    {
+        var movimientos = await contexto.MovimientosStock
+            .CountAsync(m => (m.VentaId == venta1.Id || m.VentaId == venta2.Id) && m.Tipo == TipoMovimientoStock.Venta && m.Cantidad == -1);
+        Console.WriteLine($"Cada venta deja su movimiento de stock: {(movimientos == 2 ? "OK" : "ERROR")}");
+    }
 
     await cajaServicio.RegistrarMovimientoAsync(TipoMovimientoCaja.Ingreso, 500m, "Cambio del banco", null);
     Console.WriteLine("Ingreso de $ 500,00 sin autorización: OK");
@@ -214,6 +232,140 @@ static async Task ProbarCajaAsync(PooledDbContextFactory<MiPOSDbContext> fabrica
     foreach (var linea in lineasCierre)
         Console.WriteLine($"|{linea.PadRight(42)}|");
     Console.WriteLine($"Ninguna línea supera el ancho: {(lineasCierre.All(l => l.Length <= 42) ? "OK" : "ERROR")}");
+}
+
+static async Task<int> LeerStockAsync(PooledDbContextFactory<MiPOSDbContext> fabrica, int productoId)
+{
+    await using var contexto = await fabrica.CreateDbContextAsync();
+    return await contexto.Productos.Where(p => p.Id == productoId).Select(p => p.Stock).FirstAsync();
+}
+
+// --- Prueba 10: productos y stock (contra la base real) ---
+// Usa un producto de pruebas (código PRUEBA-STOCK) que queda desactivado al terminar
+static async Task ProbarProductosYStockAsync(PooledDbContextFactory<MiPOSDbContext> fabrica, Usuario administrador)
+{
+    Console.WriteLine("\n=== Productos y stock ===");
+    var sesion = new Sesion();
+    sesion.Iniciar(administrador);
+    var productoServicio = new ProductoServicio(fabrica, sesion);
+    var stockServicio = new StockServicio(fabrica, sesion);
+    const string codigo = "PRUEBA-STOCK";
+
+    await using (var contexto = await fabrica.CreateDbContextAsync())
+    {
+        // Si quedó de una prueba anterior, se le cambia el código para poder crearlo de nuevo
+        var anteriores = await contexto.Productos.Where(p => p.CodigoBarras == codigo).ToListAsync();
+        foreach (var anterior in anteriores)
+            anterior.CodigoBarras = $"PRUEBA-{anterior.Id}";
+        await contexto.SaveChangesAsync();
+    }
+
+    var categoria = (await productoServicio.ObtenerCategoriasAsync()).First();
+    var datos = new DatosProducto(codigo.ToLower(), "  Producto de prueba  ", categoria.Id, 1000m, StockMinimo: 5);
+
+    var producto = await productoServicio.CrearAsync(datos, stockInicial: 10);
+    Console.WriteLine($"Alta con stock inicial 10: {(producto.Stock == 10 && await LeerStockAsync(fabrica, producto.Id) == 10 ? "OK" : "ERROR")}");
+    Console.WriteLine($"El código se guarda en mayúsculas y el nombre sin espacios: {(producto.CodigoBarras == codigo && producto.Nombre == "Producto de prueba" ? "OK" : "ERROR")}");
+
+    await Esperar<ProductoInvalidoException>("Código repetido da error", () => productoServicio.CrearAsync(datos, 0));
+    await Esperar<ProductoInvalidoException>("Precio cero da error",
+        () => productoServicio.CrearAsync(datos with { CodigoBarras = "OTRO-CODIGO", Precio = 0 }, 0));
+    await Esperar<ProductoInvalidoException>("Precio con 3 decimales da error",
+        () => productoServicio.CrearAsync(datos with { CodigoBarras = "OTRO-CODIGO", Precio = 1.555m }, 0));
+    await Esperar<ProductoInvalidoException>("Código con espacios da error",
+        () => productoServicio.CrearAsync(datos with { CodigoBarras = "CON ESPACIO" }, 0));
+
+    var codigoInterno = await productoServicio.GenerarCodigoInternoAsync();
+    Console.WriteLine($"Código interno sugerido: {(codigoInterno.StartsWith("INT") && codigoInterno.Length >= 7 ? "OK" : "ERROR")} ({codigoInterno})");
+
+    await stockServicio.AjustarAsync(producto.Id, -3, "Rotura");
+    Console.WriteLine($"Ajuste -3: {(await LeerStockAsync(fabrica, producto.Id) == 7 ? "OK" : "ERROR")}");
+    await Esperar<ProductoInvalidoException>("Ajuste sin motivo da error", () => stockServicio.AjustarAsync(producto.Id, 1, " "));
+    await Esperar<ProductoInvalidoException>("Ajuste de cero da error", () => stockServicio.AjustarAsync(producto.Id, 0, "Nada"));
+
+    await Esperar<ProductoInvalidoException>("Stock contado con dato viejo da error",
+        () => stockServicio.EstablecerStockAsync(producto.Id, stockLeido: 10, stockContado: 4, "Inventario"));
+    await stockServicio.EstablecerStockAsync(producto.Id, stockLeido: 7, stockContado: 4, "Inventario");
+    Console.WriteLine($"Stock contado 4: {(await LeerStockAsync(fabrica, producto.Id) == 4 ? "OK" : "ERROR")}");
+
+    var alertas = await stockServicio.ObtenerBajoMinimoAsync();
+    Console.WriteLine($"Con stock 4 y mínimo 5 aparece en alertas: {(alertas.Any(p => p.Id == producto.Id) ? "OK" : "ERROR")}");
+
+    var movimientos = await stockServicio.ObtenerMovimientosAsync(producto.Id);
+    Console.WriteLine($"Historia: inicial +10, rotura -3, inventario -3: {(movimientos.Select(m => m.Cantidad).SequenceEqual(new[] { -3, -3, 10 }) ? "OK" : "ERROR")}");
+    Console.WriteLine($"La suma de los movimientos es igual al stock: {(movimientos.Sum(m => m.Cantidad) == 4 ? "OK" : "ERROR")}");
+
+    await productoServicio.ModificarAsync(producto.Id, datos with { CodigoBarras = codigo, Precio = 1200m, StockMinimo = 2 });
+    var modificado = await productoServicio.ObtenerAsync(producto.Id);
+    Console.WriteLine($"Modificar precio y mínimo: {(modificado.Precio == 1200m && modificado.StockMinimo == 2 && modificado.Stock == 4 ? "OK" : "ERROR")}");
+    Console.WriteLine($"Con stock 4 y mínimo 2 sale de las alertas: {(!(await stockServicio.ObtenerBajoMinimoAsync()).Any(p => p.Id == producto.Id) ? "OK" : "ERROR")}");
+
+    var cajero = new Sesion();
+    cajero.Iniciar(new Usuario { Id = administrador.Id, Rol = Rol.Cajero });
+    await Esperar<PermisoDenegadoException>("Un cajero no puede ajustar stock",
+        () => new StockServicio(fabrica, cajero).AjustarAsync(producto.Id, 1, "Prueba"));
+    await Esperar<PermisoDenegadoException>("Un cajero no puede modificar productos",
+        () => new ProductoServicio(fabrica, cajero).ModificarAsync(producto.Id, datos with { CodigoBarras = codigo }));
+
+    await ProbarComprasAsync(fabrica, sesion, producto.Id);
+
+    await productoServicio.CambiarActivoAsync(producto.Id, false);
+    Console.WriteLine($"Desactivado no aparece en la caja: {(await productoServicio.BuscarPorCodigoAsync(codigo) is null ? "OK" : "ERROR")}");
+}
+
+// --- Prueba 11: compras (contra la base real) ---
+// Usa un proveedor de pruebas y el producto de pruebas de la prueba 10
+static async Task ProbarComprasAsync(PooledDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion, int productoId)
+{
+    Console.WriteLine("\n=== CUIT ===");
+    Console.WriteLine($"20-12345678-6 es válido: {(Cuit.IntentarNormalizar("20-12345678-6", out var cuit) && cuit == "20123456786" ? "OK" : "ERROR")}");
+    Console.WriteLine($"30-71234567-0 es inválido (verificador mal): {(!Cuit.IntentarNormalizar("30-71234567-0", out _) ? "OK" : "ERROR")}");
+    Console.WriteLine($"Con letras es inválido: {(!Cuit.IntentarNormalizar("20-1234567A-6", out _) ? "OK" : "ERROR")}");
+    Console.WriteLine($"Formatear: {(Cuit.Formatear("20123456786") == "20-12345678-6" ? "OK" : "ERROR")}");
+
+    Console.WriteLine("\n=== Compras ===");
+    var compraServicio = new CompraServicio(fabrica, sesion);
+    const string nombreProveedor = "Proveedor de pruebas";
+
+    var proveedor = (await compraServicio.ObtenerProveedoresAsync(incluirInactivos: true)).FirstOrDefault(p => p.Nombre == nombreProveedor);
+    if (proveedor is null)
+        proveedor = await compraServicio.CrearProveedorAsync(nombreProveedor, "20-12345678-6", "11 5555-5555");
+    else
+        await compraServicio.CambiarActivoProveedorAsync(proveedor.Id, true);
+    Console.WriteLine($"Proveedor con CUIT guardado sin guiones: {(proveedor.Cuit == "20123456786" ? "OK" : "ERROR")}");
+
+    await Esperar<CompraInvalidaException>("Proveedor repetido da error",
+        () => compraServicio.CrearProveedorAsync(nombreProveedor, null, null));
+    await Esperar<CompraInvalidaException>("CUIT inválido da error",
+        () => compraServicio.CrearProveedorAsync("Otro proveedor de pruebas", "20-12345678-0", null));
+
+    var stockAntes = await LeerStockAsync(fabrica, productoId);
+    var items = new List<ItemCompra> { new(productoId, "PRUEBA-STOCK", "Producto de prueba", 24, 650.50m) };
+
+    await Esperar<CompraInvalidaException>("Compra sin productos da error",
+        () => compraServicio.RegistrarAsync(proveedor.Id, null, new List<ItemCompra>()));
+    await Esperar<CompraInvalidaException>("Cantidad cero da error",
+        () => compraServicio.RegistrarAsync(proveedor.Id, null, new List<ItemCompra> { items[0] with { Cantidad = 0 } }));
+    await Esperar<CompraInvalidaException>("Producto repetido da error",
+        () => compraServicio.RegistrarAsync(proveedor.Id, null, new List<ItemCompra> { items[0], items[0] }));
+
+    var compra = await compraServicio.RegistrarAsync(proveedor.Id, " A-0001-00001234 ", items);
+    Console.WriteLine($"Compra registrada, total $ 15.612,00: {(compra.Total == 15612m && compra.NumeroComprobante == "A-0001-00001234" ? "OK" : "ERROR")}");
+    Console.WriteLine($"La compra suma stock ({stockAntes} -> {await LeerStockAsync(fabrica, productoId)}): {(await LeerStockAsync(fabrica, productoId) == stockAntes + 24 ? "OK" : "ERROR")}");
+
+    await using (var contexto = await fabrica.CreateDbContextAsync())
+    {
+        var movimiento = await contexto.MovimientosStock.FirstOrDefaultAsync(m => m.CompraId == compra.Id);
+        Console.WriteLine($"La compra deja su movimiento de stock: {(movimiento is { Tipo: TipoMovimientoStock.Compra, Cantidad: 24 } ? "OK" : "ERROR")}");
+    }
+
+    Console.WriteLine($"Último costo $ 650,50: {(await compraServicio.ObtenerUltimoCostoAsync(productoId) == 650.50m ? "OK" : "ERROR")}");
+    var compras = await compraServicio.ObtenerComprasAsync();
+    Console.WriteLine($"La compra aparece en la lista con su detalle: {(compras.FirstOrDefault(c => c.Id == compra.Id)?.Detalles.Count == 1 ? "OK" : "ERROR")}");
+
+    await compraServicio.CambiarActivoProveedorAsync(proveedor.Id, false);
+    await Esperar<CompraInvalidaException>("Comprar a un proveedor desactivado da error",
+        () => compraServicio.RegistrarAsync(proveedor.Id, null, items));
 }
 
 // Ejecuta la acción y comprueba que lance el error esperado

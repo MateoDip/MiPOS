@@ -1,4 +1,4 @@
-# MiPOS — Guía del proyecto para Claude Code
+﻿# MiPOS — Guía del proyecto para Claude Code
 
 ## Contexto
 
@@ -29,7 +29,7 @@ MiPOS es un sistema POS (punto de venta) para comercios minoristas, principalmen
 |---|---|---|
 | `MiPOS.Dominio` | Entidades (`Entidades/`) | Nada |
 | `MiPOS.Datos` | `MiPOSDbContext`, configuraciones Fluent API (`Configuraciones/`), migraciones, `MiPOSDbContextFactory` (solo para `dotnet ef`) | Dominio |
-| `MiPOS.Negocio` | Servicios (`Servicios/`: `ProductoServicio`, `VentaServicio`, `UsuarioServicio`, `TicketServicio`, `CajaServicio`), lógica de venta (`Ventas/`: `Carrito`, `ItemCarrito`, `Cobro`), de usuarios (`Usuarios/`), de caja (`Cajas/`: `ResumenTurno`, `OpcionesCaja`) y comprobantes (`Comprobantes/`: `TicketVenta`, `TicketCierreCaja`, `FormatoTicket`, `DatosComercio`) | Dominio, Datos, Seguridad |
+| `MiPOS.Negocio` | Servicios (`Servicios/`: `ProductoServicio`, `VentaServicio`, `UsuarioServicio`, `TicketServicio`, `CajaServicio`, `StockServicio`, `CompraServicio`), lógica de venta (`Ventas/`: `Carrito`, `ItemCarrito`, `Cobro`), de usuarios (`Usuarios/`), de caja (`Cajas/`: `ResumenTurno`, `OpcionesCaja`), de productos (`Productos/`: `DatosProducto`), de compras (`Compras/`: `ItemCompra`), utilidades comunes (`Comun/`: `Cuit`) y comprobantes (`Comprobantes/`: `TicketVenta`, `TicketCierreCaja`, `FormatoTicket`, `DatosComercio`) | Dominio, Datos, Seguridad |
 | `MiPOS.WPF` | `Vistas/`, `ViewModels/`, `Servicios/` (`DialogoServicio`, `LectorNumeros`, `VisibleSiFalse`), `App.xaml.cs` (inyección de dependencias e inicio de sesión), `appsettings.json` | Negocio, Dominio, Seguridad, Hardware |
 | `MiPOS.Seguridad` | Hash de contraseñas (`HashContrasena`), permisos por rol (`Permiso`, `Permisos`), usuario conectado (`Sesion`) | Dominio |
 | `MiPOS.Hardware` | Impresión de tickets (`Impresion/`: `IImpresoraTicket`, `ImpresoraWindows`, `ImpresoraArchivo`, `OpcionesImpresion`). Solo Windows (`net10.0-windows`, usa WPF) | Nada |
@@ -67,6 +67,10 @@ Más adelante se agregará `MiPOS.Facturacion` siguiendo el mismo criterio.
 - **Datos del comercio:** el software se vende a distintos negocios, así que nombre, dirección, CUIT, teléfono y mensaje de pie van en la sección `Comercio` de `appsettings.json` (los vacíos no se imprimen). Más adelante pasarán a una pantalla de configuración.
 - **Control de caja:** por ahora siempre activo (el interruptor del módulo llegará con la pantalla de configuración). Las cajas están en la tabla `Cajas` y cada PC indica la suya en `Caja:Numero` de `appsettings.json`. El turno (`TurnoCaja`) es de la caja, no del cajero: si cambia el usuario se sigue en el mismo turno, y cada venta guarda igual quién la hizo. La base impide dos turnos abiertos en la misma caja (índice único filtrado). Las ventas anteriores al control de caja quedan con `TurnoCajaId` en null.
 - **Arqueo ciego:** al cerrar, el cajero informa el efectivo contado sin ver el esperado; después se muestra la diferencia (contado − esperado). Retiros e ingresos de efectivo llevan motivo y entran en el arqueo; el retiro requiere el permiso `RetirarEfectivo` (autorización de administrador, verificada de nuevo en la base) y no puede superar el efectivo esperado. El efectivo esperado se calcula solo en `ResumenTurno` (inicial + ventas en efectivo + ingresos − retiros). No se vende con la caja cerrada: `VentaServicio` lo exige y guarda el turno. Al entrar a la caja, si está cerrada se ofrece abrirla. El cierre imprime un comprobante (`TicketCierreCaja`) y requiere el carrito vacío. Errores de caja: `CajaInvalidaException` (mensaje mostrado tal cual).
+- **Stock:** el módulo queda siempre activo por ahora (el interruptor llega con la pantalla de configuración). `Producto.Stock` solo cambia a través de un `MovimientoStock` (tipos Venta, Compra, Ajuste; cantidad con signo: positivo entra, negativo sale; guarda usuario, motivo y la venta o compra que lo originó). El cambio se hace con una sola instrucción en la base (`Stock = Stock + cantidad`, en `StockServicio.RegistrarMovimientoAsync`) dentro de la misma transacción que la venta o la compra, para que varias cajas no se pisen. Se puede vender sin stock: el stock queda negativo, el cajero ve un aviso y el producto aparece en las alertas. Alerta = stock negativo, o `StockMinimo > 0` y `Stock <= StockMinimo`. El ajuste por "stock contado" solo se aplica si el stock no cambió desde que se leyó. Errores de productos y stock: `ProductoInvalidoException`.
+- **Productos:** el código se guarda en mayúsculas, sin espacios; `ProductoServicio.GenerarCodigoInternoAsync` propone el próximo `INT0001`. Cambiar el precio exige además el permiso `ModificarPrecios`. El stock inicial de un producto nuevo se registra como ajuste "Stock inicial". Las categorías se crean desde la edición de producto (no se borran; si existía desactivada, se reactiva).
+- **Compras:** proveedores en tabla propia (nombre único, CUIT opcional validado con dígito verificador y guardado sin guiones). Registrar una compra suma stock en la misma transacción. Las compras no se anulan: un error se corrige con un ajuste de stock. Cada `DetalleCompra` guarda copia del nombre y el costo; el último costo se propone en la compra siguiente. Errores: `CompraInvalidaException`.
+- **Atajos de administración:** ya no quedan teclas F libres, así que las pantallas de administración usan Ctrl + letra (Ctrl+P productos y stock, Ctrl+M compras). Los botones y atajos solo se habilitan con el permiso.
 - **Montos ingresados por el cajero:** solo números con coma decimal y hasta 2 decimales; no se aceptan puntos (en `es-AR` "1500.50" se leería como 150050).
 
 ## Codificación de archivos
@@ -93,7 +97,7 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 
 **Flujo de venta:** caja → escanear/buscar → agregar al carrito → cambiar cantidad/eliminar → total → descuento opcional (requiere contraseña de administrador) → cobrar → medio de pago → comprobante (ticket fiscal o interno) → registrar venta → descontar stock si el módulo está activo → nueva venta.
 
-**Atajos de teclado de la caja:** F1 buscar, F2 producto, F3 cobrar, F4 eliminar, F5 cambiar cantidad, F6 descuento, F7 retiro/ingreso de efectivo, F8 reimprimir último ticket, F9 usuarios (solo administrador), F10 cambiar mi contraseña, F11 abrir/cerrar caja, F12 cerrar sesión, ESC cancelar.
+**Atajos de teclado de la caja:** F1 buscar, F2 producto, F3 cobrar, F4 eliminar, F5 cambiar cantidad, F6 descuento, F7 retiro/ingreso de efectivo, F8 reimprimir último ticket, F9 usuarios (solo administrador), F10 cambiar mi contraseña, F11 abrir/cerrar caja, F12 cerrar sesión, ESC cancelar, Ctrl+P productos y stock, Ctrl+M compras (estos dos, solo administrador).
 
 **Medios de pago:** efectivo, débito, crédito, Mercado Pago, QR, transferencia. Un único medio por venta. En efectivo se calcula el vuelto.
 
@@ -107,22 +111,20 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 2. Usuarios (Cajero, Administrador, permisos, autorización por contraseña) — **terminada**
 3. Impresión (ticket, impresora térmica) — **terminada** (pendiente la prueba en pantalla junto con el testeo general)
 4. Control de caja — **terminada** (pendiente la prueba en pantalla junto con el testeo general)
-5. Stock y compras — **en curso**
+5. Stock y compras — **terminada** (pendiente la prueba en pantalla junto con el testeo general)
 6. Facturación (ARCA)
 7. Hardware (scanner, impresora, cajón, terminal POS)
 8. Offline y sincronización
 9. Licenciamiento
 10. Multidioma (español y chino)
 
-## Estado de la Fase 5 (en curso)
-
-Decisiones: el módulo de stock queda siempre activo (el interruptor llega con la pantalla de configuración). Se puede vender sin stock: el stock queda negativo y aparece en las alertas. El stock solo cambia a través de un `MovimientoStock` (cantidad con signo: positivo entra, negativo sale). Se incluye la pantalla de productos. Las compras usan una tabla de proveedores.
+## Estado de la Fase 5 (terminada)
 
 - [x] 5.1 `Stock` y `StockMinimo` en `Producto`, entidad `MovimientoStock` (migración `AgregarStock`)
-- [ ] 5.2 `StockServicio` (ajuste manual, alertas) y descuento de stock al vender, en la misma transacción
-- [ ] 5.3 Pantallas: productos (alta, edición, stock mínimo, activar/desactivar), ajuste de stock y alertas
-- [ ] 5.4 Compras: `Proveedor`, `Compra`, `DetalleCompra`; registrar una compra suma stock
-- [ ] 5.5 Pantalla de compras
+- [x] 5.2 `StockServicio` (ajuste manual, stock contado, alertas, historia) y descuento de stock al vender, en la misma transacción
+- [x] 5.3 Pantallas: productos (Ctrl+P: alta, edición, código interno, categorías, activar/desactivar), ajuste de stock, movimientos, aviso de stock bajo en la caja
+- [x] 5.4 Compras: `Proveedor`, `Compra`, `DetalleCompra` (migración `AgregarCompras`); registrar una compra suma stock
+- [x] 5.5 Pantallas de compras (Ctrl+M), carga de compra y proveedores
 
 ## Estado de la Fase 4 (terminada)
 

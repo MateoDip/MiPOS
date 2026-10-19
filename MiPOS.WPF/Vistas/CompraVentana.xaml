@@ -1,0 +1,110 @@
+<Window x:Class="MiPOS.WPF.Vistas.CompraVentana"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:vm="clr-namespace:MiPOS.WPF.ViewModels"
+        mc:Ignorable="d"
+        d:DataContext="{d:DesignInstance Type=vm:CompraViewModel}"
+        Title="Nueva compra"
+        Height="680" Width="1000"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        FontSize="16">
+
+    <!-- Mismos atajos que la caja, para no tener que aprender otros -->
+    <Window.InputBindings>
+        <KeyBinding Key="F1"     Command="{Binding BuscarProductoCommand}"/>
+        <KeyBinding Key="F3"     Command="{Binding RegistrarCommand}"/>
+        <KeyBinding Key="F4"     Command="{Binding QuitarCommand}"/>
+        <KeyBinding Key="F5"     Command="{Binding CambiarCommand}"/>
+        <KeyBinding Key="Escape" Command="{Binding CancelarCommand}"/>
+    </Window.InputBindings>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <!-- Proveedor y comprobante -->
+            <RowDefinition Height="Auto"/>
+            <!-- Código -->
+            <RowDefinition Height="Auto"/>
+            <!-- Mensaje -->
+            <RowDefinition Height="*"/>
+            <!-- Productos -->
+            <RowDefinition Height="Auto"/>
+            <!-- Botones y total -->
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="300"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="Proveedor" Margin="0,0,0,4"/>
+                <ComboBox x:Name="CmbProveedor" Padding="6"
+                          ItemsSource="{Binding Proveedores}"
+                          SelectedItem="{Binding ProveedorSeleccionado}"
+                          DisplayMemberPath="Nombre"/>
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="N° de factura o remito (opcional)" Margin="0,0,0,4"/>
+                <TextBox Padding="6"
+                         MaxLength="{Binding LargoMaximoComprobante}"
+                         Text="{Binding NumeroComprobante, UpdateSourceTrigger=PropertyChanged}"/>
+            </StackPanel>
+        </Grid>
+
+        <StackPanel Grid.Row="1" Margin="0,12,0,0">
+            <TextBlock Text="Código del producto (escanee o escriba y presione Enter; F1 para buscar por nombre)" Margin="0,0,0,4"/>
+            <TextBox x:Name="TxtCodigo"
+                     FontSize="22" Padding="8"
+                     Text="{Binding CodigoIngresado, UpdateSourceTrigger=PropertyChanged}">
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Enter" Command="{Binding AgregarPorCodigoCommand}"/>
+                </TextBox.InputBindings>
+            </TextBox>
+        </StackPanel>
+
+        <TextBlock Grid.Row="2" Text="{Binding Mensaje}" TextWrapping="Wrap" Margin="0,8,0,0"
+                   Foreground="Firebrick" FontWeight="SemiBold"/>
+
+        <DataGrid x:Name="GrillaItems" Grid.Row="3" Margin="0,12"
+                  ItemsSource="{Binding Items}"
+                  SelectedItem="{Binding ItemSeleccionado}"
+                  AutoGenerateColumns="False"
+                  IsReadOnly="True"
+                  CanUserAddRows="False"
+                  SelectionMode="Single"
+                  HeadersVisibility="Column">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Código"      Binding="{Binding CodigoBarras}"   Width="150"/>
+                <DataGridTextColumn Header="Producto"    Binding="{Binding NombreProducto}" Width="*"/>
+                <DataGridTextColumn Header="Cant."       Binding="{Binding Cantidad}"       Width="80"/>
+                <DataGridTextColumn Header="Costo unit." Binding="{Binding CostoUnitario, StringFormat='$ {0:N2}'}" Width="140"/>
+                <DataGridTextColumn Header="Subtotal"    Binding="{Binding Subtotal, StringFormat='$ {0:N2}'}" Width="150"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+        <DockPanel Grid.Row="4" LastChildFill="False">
+            <DockPanel.Resources>
+                <Style TargetType="Button">
+                    <Setter Property="Focusable" Value="False"/>
+                    <Setter Property="Padding" Value="16,8"/>
+                    <Setter Property="Margin" Value="0,0,8,0"/>
+                </Style>
+            </DockPanel.Resources>
+            <Button DockPanel.Dock="Left" Content="F1  Buscar"    Command="{Binding BuscarProductoCommand}"/>
+            <Button DockPanel.Dock="Left" Content="F3  Registrar" Command="{Binding RegistrarCommand}"/>
+            <Button DockPanel.Dock="Left" Content="F4  Quitar"    Command="{Binding QuitarCommand}"/>
+            <Button DockPanel.Dock="Left" Content="F5  Cambiar"   Command="{Binding CambiarCommand}"/>
+            <Button DockPanel.Dock="Left" Content="ESC  Cancelar" Command="{Binding CancelarCommand}"/>
+            <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
+                <TextBlock Text="{Binding CantidadUnidades, StringFormat='Unidades: {0}'}" HorizontalAlignment="Right"/>
+                <TextBlock Text="{Binding Total, StringFormat='TOTAL: $ {0:N2}'}"
+                           FontSize="28" FontWeight="Bold" HorizontalAlignment="Right"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

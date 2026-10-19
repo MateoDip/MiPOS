@@ -44,7 +44,16 @@ public partial class App : Application
 
         // 3. Registrar qué objetos existen y cómo crearlos
         var servicios = new ServiceCollection();
+        RegistrarServicios(servicios, configuracion);
+        _proveedor = servicios.BuildServiceProvider();
 
+        // 4. Empezar por el inicio de sesión
+        MostrarInicioSesion();
+    }
+
+    // Separado de OnStartup para poder comprobar desde una prueba que se pueden crear todos los objetos
+    public static void RegistrarServicios(IServiceCollection servicios, IConfiguration configuracion)
+    {
         servicios.AddDbContextFactory<MiPOSDbContext>(opciones =>
             opciones.UseSqlServer(configuracion.GetConnectionString("MiPOS")));
 
@@ -73,6 +82,8 @@ public partial class App : Application
         servicios.AddTransient<UsuarioServicio>();
         servicios.AddTransient<TicketServicio>();
         servicios.AddTransient<CajaServicio>();
+        servicios.AddTransient<StockServicio>();
+        servicios.AddTransient<CompraServicio>();
         servicios.AddTransient<DialogoServicio>();
         servicios.AddTransient<LoginViewModel>();
         servicios.AddTransient<CajaViewModel>();
@@ -86,11 +97,16 @@ public partial class App : Application
         servicios.AddTransient<CambiarContrasenaViewModel>();
         servicios.AddTransient<MovimientoCajaViewModel>();
         servicios.AddTransient<CierreCajaViewModel>();
+        servicios.AddTransient<ProductosViewModel>();
+        servicios.AddTransient<ProductoEdicionViewModel>();
+        servicios.AddTransient<AjusteStockViewModel>();
+        servicios.AddTransient<MovimientosStockViewModel>();
+        servicios.AddTransient<ComprasViewModel>();
+        servicios.AddTransient<CompraViewModel>();
+        servicios.AddTransient<CompraItemViewModel>();
+        servicios.AddTransient<ProveedoresViewModel>();
+        servicios.AddTransient<ProveedorEdicionViewModel>();
 
-        _proveedor = servicios.BuildServiceProvider();
-
-        // 4. Empezar por el inicio de sesión
-        MostrarInicioSesion();
     }
 
     private void MostrarInicioSesion()

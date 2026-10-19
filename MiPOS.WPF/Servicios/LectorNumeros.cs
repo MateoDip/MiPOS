@@ -16,4 +16,9 @@ public static class LectorNumeros
             && valor >= 0
             && decimal.Round(valor, 2) == valor;
     }
+
+    // Acepta solo números enteros mayores o iguales a 0, sin signo ni puntos (ej: 12).
+    // Para cantidades de stock.
+    public static bool IntentarLeerEntero(string? texto, out int valor)
+        => int.TryParse((texto ?? string.Empty).Trim(), NumberStyles.None, CultureInfo.CurrentCulture, out valor);
 }
