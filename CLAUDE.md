@@ -107,12 +107,22 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 2. Usuarios (Cajero, Administrador, permisos, autorización por contraseña) — **terminada**
 3. Impresión (ticket, impresora térmica) — **terminada** (pendiente la prueba en pantalla junto con el testeo general)
 4. Control de caja — **terminada** (pendiente la prueba en pantalla junto con el testeo general)
-5. Stock y compras
+5. Stock y compras — **en curso**
 6. Facturación (ARCA)
 7. Hardware (scanner, impresora, cajón, terminal POS)
 8. Offline y sincronización
 9. Licenciamiento
 10. Multidioma (español y chino)
+
+## Estado de la Fase 5 (en curso)
+
+Decisiones: el módulo de stock queda siempre activo (el interruptor llega con la pantalla de configuración). Se puede vender sin stock: el stock queda negativo y aparece en las alertas. El stock solo cambia a través de un `MovimientoStock` (cantidad con signo: positivo entra, negativo sale). Se incluye la pantalla de productos. Las compras usan una tabla de proveedores.
+
+- [x] 5.1 `Stock` y `StockMinimo` en `Producto`, entidad `MovimientoStock` (migración `AgregarStock`)
+- [ ] 5.2 `StockServicio` (ajuste manual, alertas) y descuento de stock al vender, en la misma transacción
+- [ ] 5.3 Pantallas: productos (alta, edición, stock mínimo, activar/desactivar), ajuste de stock y alertas
+- [ ] 5.4 Compras: `Proveedor`, `Compra`, `DetalleCompra`; registrar una compra suma stock
+- [ ] 5.5 Pantalla de compras
 
 ## Estado de la Fase 4 (terminada)
 

@@ -255,6 +255,47 @@ namespace MiPOS.Datos.Migrations
                     b.ToTable("MovimientosCaja", (string)null);
                 });
 
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.MovimientoStock", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Cantidad")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Motivo")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("ProductoId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UsuarioId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("VentaId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UsuarioId");
+
+                    b.HasIndex("VentaId");
+
+                    b.HasIndex("ProductoId", "Fecha");
+
+                    b.ToTable("MovimientosStock", (string)null);
+                });
+
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Producto", b =>
                 {
                     b.Property<int>("Id")
@@ -283,6 +324,12 @@ namespace MiPOS.Datos.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int>("Stock")
+                        .HasColumnType("int");
+
+                    b.Property<int>("StockMinimo")
+                        .HasColumnType("int");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CategoriaId");
@@ -302,7 +349,9 @@ namespace MiPOS.Datos.Migrations
                             CategoriaId = 2,
                             CodigoBarras = "7791234",
                             Nombre = "Coca Cola 2.25L",
-                            Precio = 2500m
+                            Precio = 2500m,
+                            Stock = 0,
+                            StockMinimo = 0
                         },
                         new
                         {
@@ -311,7 +360,9 @@ namespace MiPOS.Datos.Migrations
                             CategoriaId = 1,
                             CodigoBarras = "7795678",
                             Nombre = "Arroz 1Kg",
-                            Precio = 1500m
+                            Precio = 1500m,
+                            Stock = 0,
+                            StockMinimo = 0
                         },
                         new
                         {
@@ -320,7 +371,9 @@ namespace MiPOS.Datos.Migrations
                             CategoriaId = 3,
                             CodigoBarras = "7798912",
                             Nombre = "Detergente",
-                            Precio = 2200m
+                            Precio = 2200m,
+                            Stock = 0,
+                            StockMinimo = 0
                         });
                 });
 
@@ -529,6 +582,32 @@ namespace MiPOS.Datos.Migrations
                     b.Navigation("TurnoCaja");
 
                     b.Navigation("Usuario");
+                });
+
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.MovimientoStock", b =>
+                {
+                    b.HasOne("MiPOS.Dominio.Entidades.Producto", "Producto")
+                        .WithMany()
+                        .HasForeignKey("ProductoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiPOS.Dominio.Entidades.Usuario", "Usuario")
+                        .WithMany()
+                        .HasForeignKey("UsuarioId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MiPOS.Dominio.Entidades.Venta", "Venta")
+                        .WithMany()
+                        .HasForeignKey("VentaId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Producto");
+
+                    b.Navigation("Usuario");
+
+                    b.Navigation("Venta");
                 });
 
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Producto", b =>
