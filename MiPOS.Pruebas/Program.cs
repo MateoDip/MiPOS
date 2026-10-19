@@ -6,7 +6,11 @@ using MiPOS.Negocio.Servicios;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Seguridad;
 using MiPOS.Negocio.Comprobantes;
+using MiPOS.Hardware;
+using MiPOS.Hardware.Cajon;
 using MiPOS.Hardware.Impresion;
+using MiPOS.Hardware.Lector;
+using MiPOS.Hardware.Terminal;
 using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Ventas;
 using MiPOS.Negocio.Productos;
@@ -137,6 +141,53 @@ catch (ImpresionException ex)
     Console.WriteLine($"Configuración inválida da error: OK ({ex.Message})");
 }
 
+// --- Prueba 13: hardware (sin dispositivos reales) ---
+Console.WriteLine("\n=== Hardware: cajón de dinero ===");
+Console.WriteLine($"Comando por defecto = ESC p 0 25 250: {(new OpcionesCajon().LeerComando().SequenceEqual(new byte[] { 0x1B, 0x70, 0x00, 0x19, 0xFA }) ? "OK" : "ERROR")}");
+Esperar2<HardwareException>("Comando mal escrito da error", () => new OpcionesCajon { Comando = "1B 7G" }.LeerComando());
+await new CajonDinero(new OpcionesCajon(), new OpcionesImpresion()).AbrirAsync();
+Console.WriteLine("Cajón desactivado no hace nada: OK");
+await Esperar<HardwareException>("Cajón en un puerto que no existe da error",
+    () => new CajonDinero(new OpcionesCajon { Modo = ModoCajon.Serial, Puerto = "COM97" }, new OpcionesImpresion()).AbrirAsync());
+await Esperar<HardwareException>("Cajón en una impresora que no existe da error",
+    () => new CajonDinero(new OpcionesCajon { Modo = ModoCajon.Impresora, Impresora = "Impresora que no existe" }, new OpcionesImpresion()).AbrirAsync());
+
+Console.WriteLine("\n=== Hardware: lector de códigos ===");
+var lector = new LectorCodigos(new OpcionesLector { Modo = ModoLector.Serial, Puerto = "COM98" });
+var leidos = lector.Separar("77912").Concat(lector.Separar("34\r\n7795")).Concat(lector.Separar("678\r")).ToList();
+Console.WriteLine($"Junta los pedazos y separa por Enter: {(leidos.SequenceEqual(new[] { "7791234", "7795678" }) ? "OK" : "ERROR (" + string.Join(",", leidos) + ")")}");
+Esperar2<HardwareException>("Lector en un puerto que no existe da error", () => lector.Iniciar(_ => { }));
+new LectorCodigos(new OpcionesLector()).Iniciar(_ => { });
+Console.WriteLine("Lector como teclado no abre ningún puerto: OK");
+
+Console.WriteLine("\n=== Hardware: terminal de pago ===");
+var orden = TerminalMercadoPagoPoint.ArmarOrden(2500m, "mipos-abc", "Venta MiPOS", "NEWLAND_N950__SBX0000001");
+Console.WriteLine($"Orden de Mercado Pago (tipo point, monto \"2500.00\", terminal): {(orden["type"]!.GetValue<string>() == "point" && orden["transactions"]!["payments"]![0]!["amount"]!.GetValue<string>() == "2500.00" && orden["config"]!["point"]!["terminal_id"]!.GetValue<string>() == "NEWLAND_N950__SBX0000001" ? "OK" : "ERROR")}");
+var procesada = TerminalMercadoPagoPoint.Interpretar(System.Text.Json.Nodes.JsonNode.Parse("""{"id":"ORD1","status":"processed","transactions":{"payments":[{"id":"PAY99"}]}}""")!);
+Console.WriteLine($"processed = aprobado con el id del pago: {(procesada is { Aprobado: true, IdPago: "PAY99" } ? "OK" : "ERROR")}");
+var enTerminal = TerminalMercadoPagoPoint.Interpretar(System.Text.Json.Nodes.JsonNode.Parse("""{"id":"ORD1","status":"at_terminal"}""")!);
+Console.WriteLine($"at_terminal = sigue esperando: {(enTerminal is null ? "OK" : "ERROR")}");
+var canceladaEnTerminal = TerminalMercadoPagoPoint.Interpretar(System.Text.Json.Nodes.JsonNode.Parse("""{"id":"ORD1","status":"canceled","status_detail":"canceled_on_terminal"}""")!);
+Console.WriteLine($"canceled = no aprobado: {(canceladaEnTerminal is { Aprobado: false } ? "OK" : "ERROR")} ({canceladaEnTerminal?.Mensaje})");
+Esperar2<HardwareException>("Mercado Pago sin Access Token da error", () => new OpcionesTerminal { Modo = ModoTerminal.MercadoPagoPoint }.Validar());
+
+var simulada = new TerminalSimulada();
+var aprobado = await simulada.CobrarAsync(2500m, "x", "prueba", null, CancellationToken.None);
+Console.WriteLine($"Terminal simulada aprueba: {(aprobado is { Aprobado: true } && aprobado.IdPago!.StartsWith("SIM-") ? "OK" : "ERROR")}");
+var rechazado = await simulada.CobrarAsync(100.99m, "x", "prueba", null, CancellationToken.None);
+Console.WriteLine($"Terminal simulada rechaza los ,99: {(!rechazado.Aprobado ? "OK" : "ERROR")}");
+using (var cancelar = new CancellationTokenSource(TimeSpan.FromMilliseconds(300)))
+{
+    var cancelado = await simulada.CobrarAsync(2500m, "x", "prueba", null, cancelar.Token);
+    Console.WriteLine($"Terminal simulada se puede cancelar: {(!cancelado.Aprobado ? "OK" : "ERROR")}");
+}
+
+Console.WriteLine("\n=== Hardware: ticket de prueba ===");
+var lineasPrueba = TicketPrueba.Armar(comercioEjemplo, 32);
+foreach (var linea in lineasPrueba)
+    Console.WriteLine($"|{linea.PadRight(32)}|");
+Console.WriteLine($"Ninguna línea supera el ancho y la regla ocupa la línea justa: {(lineasPrueba.All(l => l.Length <= 32) && lineasPrueba.Any(l => l == "12345678901234567890123456789012") ? "OK" : "ERROR")}");
+
 // --- Prueba 9: control de caja (contra la base real) ---
 // Se usa una caja de pruebas (N° 99) para no tocar el turno de la Caja 1.
 // Las ventas de esta prueba quedan registradas en la base de desarrollo, en la caja 99.
@@ -197,7 +248,8 @@ static async Task ProbarCajaAsync(PooledDbContextFactory<MiPOSDbContext> fabrica
     var stockAntes = await LeerStockAsync(fabrica, carrito.Items[0].ProductoId);
 
     var venta1 = await ventaServicio.RegistrarAsync(carrito, 1, 3000m);   // efectivo
-    var venta2 = await ventaServicio.RegistrarAsync(carrito, 2, null);    // débito
+    var venta2 = await ventaServicio.RegistrarAsync(carrito, 2, null, referenciaPago: " CUPON-123 ");    // débito con cupón
+    Console.WriteLine($"El débito guarda el cupón: {(venta2.ReferenciaPago == "CUPON-123" ? "OK" : "ERROR")}");
     Console.WriteLine($"Las ventas quedan en el turno: {(venta1.TurnoCajaId == turno.Id && venta2.TurnoCajaId == turno.Id ? "OK" : "ERROR")}");
 
     // Cada venta descuenta 1 unidad y deja su movimiento de stock

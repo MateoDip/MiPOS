@@ -31,6 +31,8 @@
         <KeyBinding Key="P" Modifiers="Control" Command="{Binding GestionarProductosCommand}"/>
         <KeyBinding Key="M" Modifiers="Control" Command="{Binding GestionarComprasCommand}"/>
         <KeyBinding Key="F" Modifiers="Control" Command="{Binding VerFacturasPendientesCommand}"/>
+        <KeyBinding Key="G" Modifiers="Control" Command="{Binding AbrirCajonManualCommand}"/>
+        <KeyBinding Key="H" Modifiers="Control" Command="{Binding ProbarHardwareCommand}"/>
     </Window.InputBindings>
 
     <Window.Resources>

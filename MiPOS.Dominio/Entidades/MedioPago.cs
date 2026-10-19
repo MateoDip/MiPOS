@@ -9,5 +9,8 @@ public class MedioPago
     // Se usa esta marca en vez de comparar el nombre (que cambiará con el idioma).
     public bool EsEfectivo { get; set; }
 
+    // Se cobra con la terminal de pago (posnet o Mercado Pago Point): débito, crédito, etc.
+    public bool UsaTerminal { get; set; }
+
     public bool Activo { get; set; } = true;
 }

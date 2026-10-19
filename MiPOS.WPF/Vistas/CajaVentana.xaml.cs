@@ -25,6 +25,9 @@ public partial class CajaVentana : Window
         // Al cerrar sesión se cierra la caja (App vuelve a mostrar el inicio de sesión)
         viewModel.SesionCerrada += Close;
 
+        // Al cerrarse, se libera el puerto del lector de códigos (si usa uno)
+        Closed += (_, _) => viewModel.LiberarDispositivos();
+
         // Si el producto seleccionado queda fuera de lo visible, se desplaza la grilla para mostrarlo
         GrillaCarrito.SelectionChanged += (_, _) =>
         {

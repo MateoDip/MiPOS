@@ -28,6 +28,7 @@ public class VentaConfiguracion : IEntityTypeConfiguration<Venta>
                .OnDelete(DeleteBehavior.Restrict);
         builder.Property(v => v.MontoRecibido).HasPrecision(18, 2);
         builder.Property(v => v.Vuelto).HasPrecision(18, 2);
+        builder.Property(v => v.ReferenciaPago).HasMaxLength(100);
 
         // Restrict: no se puede borrar un usuario que tenga ventas (igual se desactivan, no se borran)
         builder.HasOne(v => v.Usuario)

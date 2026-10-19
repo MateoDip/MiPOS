@@ -20,5 +20,8 @@ public enum Permiso
     ConfigurarFacturacion,
     ConfigurarSistema,
     CambiarIdioma,
-    GestionarLicencia
+    GestionarLicencia,
+
+    // Abrir el cajón de dinero sin una venta (Ctrl+G)
+    AbrirCajon
 }

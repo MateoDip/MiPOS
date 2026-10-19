@@ -52,9 +52,10 @@ public class VentaServicio
     /// montoRecibido solo se usa en efectivo (en los demás medios se ignora).
     /// receptor: a quién se factura (null = consumidor final). Si la facturación está activa,
     /// la factura queda guardada como pendiente; el CAE se pide después (FacturacionServicio).
+    /// referenciaPago: cupón u operación de la terminal (solo en medios con terminal; opcional).
     /// </summary>
     public async Task<Venta> RegistrarAsync(Carrito carrito, int medioPagoId, decimal? montoRecibido,
-                                            DatosReceptor? receptor = null)
+                                            DatosReceptor? receptor = null, string? referenciaPago = null)
     {
         // Toda venta queda registrada a nombre del usuario conectado
         var usuario = _sesion.UsuarioActual
@@ -118,6 +119,15 @@ public class VentaServicio
 
             if (autorizante is null || !Permisos.Tiene(autorizante.Rol, Permiso.AplicarDescuento))
                 throw new VentaInvalidaException("El descuento no está autorizado por un usuario con permiso. Quítelo o vuelva a aplicarlo.");
+        }
+
+        if (medio.UsaTerminal && !string.IsNullOrWhiteSpace(referenciaPago))
+        {
+            referenciaPago = referenciaPago.Trim();
+            if (referenciaPago.Length > 100)
+                throw new VentaInvalidaException("El número de cupón u operación no puede tener más de 100 caracteres.");
+
+            venta.ReferenciaPago = referenciaPago;
         }
 
         if (medio.EsEfectivo)

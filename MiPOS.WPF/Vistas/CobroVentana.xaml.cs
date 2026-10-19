@@ -18,10 +18,11 @@ public partial class CobroVentana : Window
         // (si no, la venta podría quedar guardada sin que la caja se entere)
         Closing += (_, e) => e.Cancel = viewModel.Guardando;
 
-        // Si se elige efectivo, el cursor va a "Paga con".
+        // Si se elige efectivo, el cursor va a "Paga con"; con terminal manual, al cupón.
         // Si se elige otro medio, "Paga con" se oculta y el foco queda en la ventana,
         // para que las flechas, Enter y Esc sigan funcionando.
         TxtPagaCon.IsVisibleChanged += (_, _) => PonerFoco();
+        TxtCupon.IsVisibleChanged += (_, _) => PonerFoco();
         Loaded += (_, _) => PonerFoco();
     }
 
@@ -29,6 +30,8 @@ public partial class CobroVentana : Window
     {
         if (TxtPagaCon.IsVisible)
             TxtPagaCon.Focus();
+        else if (TxtCupon.IsVisible)
+            TxtCupon.Focus();
         else
             Keyboard.Focus(this);
     }

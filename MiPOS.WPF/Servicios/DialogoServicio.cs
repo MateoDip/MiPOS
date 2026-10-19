@@ -261,6 +261,17 @@ public class DialogoServicio
         new FacturasPendientesVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog();
     }
 
+    // Ctrl+H: prueba de impresora, cajón y lector
+    public void ProbarHardware()
+    {
+        var viewModel = _proveedor.GetRequiredService<HardwareViewModel>();
+        new HardwareVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog();
+    }
+
+    // true si hay alguna ventana abierta además de la principal (la caja)
+    public bool HayDialogoAbierto
+        => Application.Current.Windows.OfType<Window>().Count(v => v.IsVisible) > 1;
+
     // El diálogo nuevo queda encima de la ventana que se está usando
     // (por ejemplo, "Editar usuario" encima de la lista de usuarios, no de la caja)
     private static Window VentanaActiva()

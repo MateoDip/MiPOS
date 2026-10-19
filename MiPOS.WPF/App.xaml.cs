@@ -7,7 +7,10 @@ using Microsoft.Extensions.DependencyInjection;
 using MiPOS.Datos;
 using MiPOS.Facturacion;
 using MiPOS.Facturacion.Arca;
+using MiPOS.Hardware.Cajon;
 using MiPOS.Hardware.Impresion;
+using MiPOS.Hardware.Lector;
+using MiPOS.Hardware.Terminal;
 using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Comprobantes;
 using MiPOS.Negocio.Facturacion;
@@ -80,6 +83,22 @@ public partial class App : Application
                 : new ImpresoraWindows(opciones);
         });
 
+        // Cajón de dinero, lector de códigos y terminal de pago: cada caja tiene los suyos
+        servicios.AddTransient(_ => configuracion.GetSection("Cajon").Get<OpcionesCajon>() ?? new OpcionesCajon());
+        servicios.AddTransient(_ => configuracion.GetSection("Lector").Get<OpcionesLector>() ?? new OpcionesLector());
+        servicios.AddTransient(_ => configuracion.GetSection("Terminal").Get<OpcionesTerminal>() ?? new OpcionesTerminal());
+        servicios.AddTransient<CajonDinero>();
+        servicios.AddTransient<LectorCodigos>();
+
+        // Con qué terminal se cobra depende de Terminal:Modo (en Manual no se usa: el cajero anota el cupón)
+        servicios.AddTransient<ITerminalPago>(proveedor =>
+        {
+            var opciones = proveedor.GetRequiredService<OpcionesTerminal>();
+            return opciones.Modo == ModoTerminal.MercadoPagoPoint
+                ? new TerminalMercadoPagoPoint(opciones)
+                : new TerminalSimulada();
+        });
+
         // Factura electrónica (sección "Facturacion"): la parte técnica y los datos fiscales del comercio
         servicios.AddTransient(_ => configuracion.GetSection("Facturacion").Get<OpcionesFacturacion>() ?? new OpcionesFacturacion());
         servicios.AddTransient(_ => configuracion.GetSection("Facturacion").Get<DatosFiscales>() ?? new DatosFiscales());
@@ -126,6 +145,7 @@ public partial class App : Application
         servicios.AddTransient<ProveedorEdicionViewModel>();
         servicios.AddTransient<ClienteFacturaViewModel>();
         servicios.AddTransient<FacturasPendientesViewModel>();
+        servicios.AddTransient<HardwareViewModel>();
 
     }
 

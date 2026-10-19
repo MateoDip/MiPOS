@@ -39,6 +39,10 @@ public class Venta
     public decimal? MontoRecibido { get; set; }
     public decimal? Vuelto { get; set; }
 
+    // Solo en los medios con terminal: el número de cupón/autorización (terminal manual)
+    // o de operación de Mercado Pago (terminal integrada). Opcional.
+    public string? ReferenciaPago { get; set; }
+
     public List<DetalleVenta> Detalles { get; set; } = new();
 
     // Factura electrónica (null si la facturación estaba desactivada al vender)

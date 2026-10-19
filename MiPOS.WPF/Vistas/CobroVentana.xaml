@@ -67,6 +67,23 @@
                        FontSize="26" FontWeight="Bold" Margin="0,8,0,0"/>
         </StackPanel>
 
+        <!-- Terminal manual (posnet no conectado): número de cupón o autorización, opcional -->
+        <StackPanel Visibility="{Binding PideCupon, Converter={StaticResource VisibleSiEsTrue}}">
+            <TextBlock Text="N° de cupón o autorización (opcional)" Margin="0,12,0,4"/>
+            <TextBox x:Name="TxtCupon" Padding="8" MaxLength="100"
+                     Text="{Binding Cupon, UpdateSourceTrigger=PropertyChanged}">
+                <TextBox.InputBindings>
+                    <KeyBinding Key="Up"    Command="{Binding SubirCommand}"/>
+                    <KeyBinding Key="Down"  Command="{Binding BajarCommand}"/>
+                    <KeyBinding Key="Enter" Command="{Binding ConfirmarCommand}"/>
+                </TextBox.InputBindings>
+            </TextBox>
+        </StackPanel>
+
+        <!-- Terminal integrada: estado del cobro -->
+        <TextBlock Text="{Binding MensajeTerminal}" TextWrapping="Wrap"
+                   FontSize="20" FontWeight="Bold" Foreground="SteelBlue" Margin="0,12,0,0"/>
+
         <TextBlock Text="{Binding Mensaje}" TextWrapping="Wrap"
                    Foreground="Firebrick" FontWeight="SemiBold" Margin="0,12,0,0"/>
 

@@ -358,6 +358,9 @@ namespace MiPOS.Datos.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("nvarchar(50)");
 
+                    b.Property<bool>("UsaTerminal")
+                        .HasColumnType("bit");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Nombre")
@@ -371,42 +374,48 @@ namespace MiPOS.Datos.Migrations
                             Id = 1,
                             Activo = true,
                             EsEfectivo = true,
-                            Nombre = "Efectivo"
+                            Nombre = "Efectivo",
+                            UsaTerminal = false
                         },
                         new
                         {
                             Id = 2,
                             Activo = true,
                             EsEfectivo = false,
-                            Nombre = "Débito"
+                            Nombre = "Débito",
+                            UsaTerminal = true
                         },
                         new
                         {
                             Id = 3,
                             Activo = true,
                             EsEfectivo = false,
-                            Nombre = "Crédito"
+                            Nombre = "Crédito",
+                            UsaTerminal = true
                         },
                         new
                         {
                             Id = 4,
                             Activo = true,
                             EsEfectivo = false,
-                            Nombre = "Mercado Pago"
+                            Nombre = "Mercado Pago",
+                            UsaTerminal = true
                         },
                         new
                         {
                             Id = 5,
                             Activo = true,
                             EsEfectivo = false,
-                            Nombre = "QR"
+                            Nombre = "QR",
+                            UsaTerminal = false
                         },
                         new
                         {
                             Id = 6,
                             Activo = true,
                             EsEfectivo = false,
-                            Nombre = "Transferencia"
+                            Nombre = "Transferencia",
+                            UsaTerminal = false
                         });
                 });
 
@@ -746,6 +755,10 @@ namespace MiPOS.Datos.Migrations
                     b.Property<decimal?>("MontoRecibido")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("ReferenciaPago")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<decimal>("Subtotal")
                         .HasPrecision(18, 2)

@@ -3,6 +3,8 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Facturacion;
+using MiPOS.Hardware;
+using MiPOS.Hardware.Terminal;
 using MiPOS.Negocio.Facturacion;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Negocio.Ventas;
@@ -15,13 +17,24 @@ public partial class CobroViewModel : ObservableObject
     private readonly VentaServicio _ventaServicio;
     private readonly FacturacionServicio _facturacionServicio;
     private readonly DialogoServicio _dialogos;
+    private readonly OpcionesTerminal _opcionesTerminal;
+    private readonly ITerminalPago _terminal;
     private Carrito? _carrito;
 
-    public CobroViewModel(VentaServicio ventaServicio, FacturacionServicio facturacionServicio, DialogoServicio dialogos)
+    // Terminal integrada: referencia del cobro en curso (se reutiliza si hay que reintentar, para no cobrar dos veces)
+    // y el número de operación cuando la terminal ya aprobó el pago
+    private string? _referenciaCobro;
+    private string? _pagoAprobado;
+    private CancellationTokenSource? _cancelacionTerminal;
+
+    public CobroViewModel(VentaServicio ventaServicio, FacturacionServicio facturacionServicio, DialogoServicio dialogos,
+                          OpcionesTerminal opcionesTerminal, ITerminalPago terminal)
     {
         _ventaServicio = ventaServicio;
         _facturacionServicio = facturacionServicio;
         _dialogos = dialogos;
+        _opcionesTerminal = opcionesTerminal;
+        _terminal = terminal;
     }
 
     // true = venta registrada, false = cerró sin cobrar. La ventana se cierra al recibirlo.
@@ -39,9 +52,20 @@ public partial class CobroViewModel : ObservableObject
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(EsEfectivo))]
+    [NotifyPropertyChangedFor(nameof(PideCupon))]
     private MedioPago? medioSeleccionado;
 
     public bool EsEfectivo => MedioSeleccionado?.EsEfectivo == true;
+
+    // Terminal manual (posnet no conectado): se anota el cupón o número de autorización
+    public bool PideCupon => MedioSeleccionado?.UsaTerminal == true && !_opcionesTerminal.EsIntegrada;
+
+    [ObservableProperty]
+    private string cupon = string.Empty;
+
+    // Terminal integrada: qué está pasando en la terminal ("El cliente está pagando...")
+    [ObservableProperty]
+    private string mensajeTerminal = string.Empty;
 
     [ObservableProperty]
     private string pagaCon = string.Empty;
@@ -119,7 +143,8 @@ public partial class CobroViewModel : ObservableObject
 
     private void MoverSeleccion(int paso)
     {
-        if (MediosPago.Count == 0 || Guardando)
+        // Con el pago ya aprobado en la terminal no se puede cambiar el medio
+        if (MediosPago.Count == 0 || Guardando || _pagoAprobado is not null)
             return;
 
         var posicion = MedioSeleccionado is null ? -1 : MediosPago.IndexOf(MedioSeleccionado);
@@ -171,17 +196,28 @@ public partial class CobroViewModel : ObservableObject
         try
         {
             Guardando = true;
+
+            // Terminal integrada: primero se cobra; la venta se registra solo si el pago se aprobó
+            var referenciaPago = PideCupon ? Cupon : null;
+            if (MedioSeleccionado.UsaTerminal && _opcionesTerminal.EsIntegrada)
+            {
+                if (_pagoAprobado is null && !await CobrarEnTerminalAsync())
+                    return;
+
+                referenciaPago = _pagoAprobado;
+            }
+
             Mensaje = "Registrando venta...";
             VentaRegistrada = await _ventaServicio.RegistrarAsync(_carrito, MedioSeleccionado.Id, montoRecibido,
-                FacturacionActiva ? Receptor : null);
+                FacturacionActiva ? Receptor : null, referenciaPago);
         }
         catch (Exception ex) when (ex is VentaInvalidaException or FacturaInvalidaException or FacturacionException)
         {
-            Mensaje = ex.Message;
+            Mensaje = MensajeConPagoCobrado(ex.Message);
         }
         catch (Exception)
         {
-            Mensaje = "Error al registrar la venta. No se guardó. Verifique la conexión con la base de datos.";
+            Mensaje = MensajeConPagoCobrado("Error al registrar la venta. No se guardó. Verifique la conexión con la base de datos.");
         }
         finally
         {
@@ -193,11 +229,68 @@ public partial class CobroViewModel : ObservableObject
             Cerrar?.Invoke(true);
     }
 
-    // Esc: volver a la caja sin cobrar (no se permite mientras se guarda)
+    // Manda el monto a la terminal y espera. true = pago aprobado.
+    private async Task<bool> CobrarEnTerminalAsync()
+    {
+        // La misma referencia en los reintentos: si el pedido anterior llegó a Mercado Pago, no se crea otro cobro
+        _referenciaCobro ??= $"mipos-{Guid.NewGuid():N}";
+        _cancelacionTerminal = new CancellationTokenSource();
+        var progreso = new Progress<string>(texto => MensajeTerminal = texto);
+
+        try
+        {
+            Mensaje = string.Empty;
+            var resultado = await _terminal.CobrarAsync(Total, _referenciaCobro, "Venta MiPOS", progreso, _cancelacionTerminal.Token);
+
+            if (!resultado.Aprobado)
+            {
+                MensajeTerminal = string.Empty;
+                Mensaje = resultado.Mensaje;
+                _referenciaCobro = null; // el próximo intento es un cobro nuevo
+                return false;
+            }
+
+            _pagoAprobado = resultado.IdPago ?? _referenciaCobro;
+            MensajeTerminal = $"Pago aprobado (operación {_pagoAprobado}).";
+            return true;
+        }
+        catch (HardwareException ex)
+        {
+            MensajeTerminal = string.Empty;
+            Mensaje = $"{ex.Message} Puede reintentar con Enter o elegir otro medio de pago.";
+            return false;
+        }
+        finally
+        {
+            _cancelacionTerminal.Dispose();
+            _cancelacionTerminal = null;
+        }
+    }
+
+    // Si la terminal ya cobró y falló el registro, hay que dejarlo bien claro: no se debe volver a cobrar
+    private string MensajeConPagoCobrado(string error)
+        => _pagoAprobado is null
+            ? error
+            : $"ATENCIÓN: el pago YA SE COBRÓ en la terminal (operación {_pagoAprobado}), pero la venta no se registró: {error} Presione Enter para reintentar el registro (no se vuelve a cobrar).";
+
+    // Esc: volver a la caja sin cobrar. Mientras la terminal está cobrando, pide cancelar el cobro.
     [RelayCommand]
     private void Cancelar()
     {
-        if (!Guardando)
-            Cerrar?.Invoke(false);
+        if (_cancelacionTerminal is not null)
+        {
+            _cancelacionTerminal.Cancel();
+            return;
+        }
+
+        if (Guardando)
+            return;
+
+        if (_pagoAprobado is not null
+            && !_dialogos.Confirmar($"El pago ya se cobró en la terminal (operación {_pagoAprobado}) y la venta NO está registrada. Si sale, tendrá que devolverle el dinero al cliente desde la terminal. ¿Salir igual?",
+                "Pago cobrado sin venta"))
+            return;
+
+        Cerrar?.Invoke(false);
     }
 }

@@ -77,6 +77,8 @@ public static class TicketVenta
         DosColumnas(lineas, medio, Dinero(venta.MontoRecibido ?? venta.Total), ancho);
         if (venta.Vuelto is decimal vuelto)
             DosColumnas(lineas, "Vuelto", Dinero(vuelto), ancho);
+        if (!string.IsNullOrEmpty(venta.ReferenciaPago))
+            AjustarTexto(lineas, $"Cupón/Operación: {venta.ReferenciaPago}", ancho);
 
         // Factura B a consumidor final: Régimen de Transparencia Fiscal al Consumidor (Ley 27.743)
         if (factura?.Tipo == TipoComprobante.FacturaB)

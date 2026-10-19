@@ -20,9 +20,9 @@ public class MedioPagoConfiguracion : IEntityTypeConfiguration<MedioPago>
         // Medios de pago de la especificación
         builder.HasData(
             new MedioPago { Id = 1, Nombre = "Efectivo", EsEfectivo = true },
-            new MedioPago { Id = 2, Nombre = "Débito" },
-            new MedioPago { Id = 3, Nombre = "Crédito" },
-            new MedioPago { Id = 4, Nombre = "Mercado Pago" },
+            new MedioPago { Id = 2, Nombre = "Débito", UsaTerminal = true },
+            new MedioPago { Id = 3, Nombre = "Crédito", UsaTerminal = true },
+            new MedioPago { Id = 4, Nombre = "Mercado Pago", UsaTerminal = true },
             new MedioPago { Id = 5, Nombre = "QR" },
             new MedioPago { Id = 6, Nombre = "Transferencia" }
         );

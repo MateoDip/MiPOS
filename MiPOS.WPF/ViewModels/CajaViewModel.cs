@@ -3,7 +3,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Facturacion;
+using MiPOS.Hardware;
+using MiPOS.Hardware.Cajon;
 using MiPOS.Hardware.Impresion;
+using MiPOS.Hardware.Lector;
 using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Facturacion;
 using MiPOS.Negocio.Servicios;
@@ -30,6 +33,8 @@ public partial class CajaViewModel : ObservableObject
     private readonly StockServicio _stockServicio;
     private readonly FacturacionServicio _facturacionServicio;
     private readonly IImpresoraTicket _impresora;
+    private readonly CajonDinero _cajon;
+    private readonly LectorCodigos _lector;
     private readonly DialogoServicio _dialogos;
     private readonly Sesion _sesion;
     private readonly Carrito _carrito = new();
@@ -37,7 +42,8 @@ public partial class CajaViewModel : ObservableObject
     public CajaViewModel(ProductoServicio productoServicio, UsuarioServicio usuarioServicio,
                          VentaServicio ventaServicio, TicketServicio ticketServicio, CajaServicio cajaServicio,
                          StockServicio stockServicio, FacturacionServicio facturacionServicio,
-                         IImpresoraTicket impresora, DialogoServicio dialogos, Sesion sesion)
+                         IImpresoraTicket impresora, CajonDinero cajon, LectorCodigos lector,
+                         DialogoServicio dialogos, Sesion sesion)
     {
         _productoServicio = productoServicio;
         _usuarioServicio = usuarioServicio;
@@ -47,6 +53,8 @@ public partial class CajaViewModel : ObservableObject
         _stockServicio = stockServicio;
         _facturacionServicio = facturacionServicio;
         _impresora = impresora;
+        _cajon = cajon;
+        _lector = lector;
         _dialogos = dialogos;
         _sesion = sesion;
     }
@@ -215,6 +223,10 @@ public partial class CajaViewModel : ObservableObject
                 : $"Venta N° {venta.Id} registrada.";
             ActualizarTotales();
 
+            // En efectivo se abre el cajón para guardar la plata y dar el vuelto
+            if (venta.MontoRecibido is not null)
+                _ = AbrirCajonAsync();
+
             // Se factura e imprime sin esperar: el cajero puede empezar la próxima venta mientras sale el ticket.
             // Si falla, la venta ya está registrada igual y se avisa (factura pendiente, o reimprimir con F8).
             _ = FacturarEImprimirAsync(venta.Id);
@@ -327,6 +339,7 @@ public partial class CajaViewModel : ObservableObject
 
             await ActualizarAvisoStockAsync();
             await ActualizarAvisoFacturasAsync();
+            IniciarLector();
 
             if (!CajaAbierta)
                 await AbrirCajaAsync();
@@ -375,6 +388,7 @@ public partial class CajaViewModel : ObservableObject
         try
         {
             Turno = await _cajaServicio.AbrirTurnoAsync(montoInicial);
+            _ = AbrirCajonAsync(); // para guardar el cambio inicial
             NombreCaja = Turno.Caja?.Nombre ?? NombreCaja;
             Mensaje = string.Empty;
             MensajeExito = $"Caja abierta con $ {montoInicial:N2}.";
@@ -401,6 +415,8 @@ public partial class CajaViewModel : ObservableObject
             return;
         }
 
+        // Se abre el cajón para contar el efectivo
+        _ = AbrirCajonAsync();
         var resumen = _dialogos.CerrarCaja();
 
         // null = volvió sin cerrar
@@ -440,6 +456,7 @@ public partial class CajaViewModel : ObservableObject
         {
             Mensaje = string.Empty;
             MensajeExito = "Movimiento de efectivo registrado.";
+            _ = AbrirCajonAsync();
         }
 
         AccionTerminada?.Invoke();
@@ -606,6 +623,87 @@ public partial class CajaViewModel : ObservableObject
     }
 
     private bool PuedeGestionarCompras() => _sesion.Tiene(Permiso.GestionarCompras);
+
+    // ----- Hardware -----
+
+    // Abre el cajón (si hay uno configurado). Si falla, se avisa pero no se interrumpe nada.
+    private async Task AbrirCajonAsync()
+    {
+        try
+        {
+            await _cajon.AbrirAsync();
+        }
+        catch (HardwareException ex)
+        {
+            Mensaje = $"No se pudo abrir el cajón: {ex.Message}";
+        }
+    }
+
+    // Ctrl+G: abrir el cajón sin una venta (por ejemplo, para dar cambio). Necesita autorización.
+    [RelayCommand]
+    private async Task AbrirCajonManualAsync()
+    {
+        if (!_cajon.EstaActivo)
+        {
+            Mensaje = "No hay un cajón de dinero configurado en esta caja (Cajon:Modo en appsettings.json).";
+            AccionTerminada?.Invoke();
+            return;
+        }
+
+        var autorizante = ObtenerAutorizacion(Permiso.AbrirCajon, "Abrir el cajón de dinero sin una venta");
+        if (autorizante is not null)
+        {
+            Mensaje = string.Empty;
+            await AbrirCajonAsync();
+            if (Mensaje.Length == 0)
+                MensajeExito = $"Cajón abierto (autorizó {autorizante.NombreCompleto}).";
+        }
+
+        AccionTerminada?.Invoke();
+    }
+
+    // Ctrl+H: probar impresora, cajón y lector (solo quien configura el hardware)
+    [RelayCommand(CanExecute = nameof(PuedeConfigurarHardware))]
+    private void ProbarHardware()
+    {
+        _dialogos.ProbarHardware();
+        AccionTerminada?.Invoke();
+    }
+
+    private bool PuedeConfigurarHardware() => _sesion.Tiene(Permiso.ConfigurarHardware);
+
+    // Lector por puerto serie: los códigos llegan desde otro hilo y se pasan al hilo de la pantalla
+    private void IniciarLector()
+    {
+        if (!_lector.UsaPuertoSerie)
+            return;
+
+        var pantalla = SynchronizationContext.Current;
+        try
+        {
+            _lector.Iniciar(codigo => pantalla?.Post(_ => CodigoLeidoPorPuerto(codigo), null));
+        }
+        catch (HardwareException ex)
+        {
+            Mensaje = ex.Message;
+        }
+    }
+
+    private void CodigoLeidoPorPuerto(string codigo)
+    {
+        // Con otra ventana abierta (cobro, búsqueda...) no se toca el carrito
+        if (_dialogos.HayDialogoAbierto)
+        {
+            Mensaje = $"Se leyó el código {codigo} con otra ventana abierta: no se agregó. Ciérrela y vuelva a escanear.";
+            return;
+        }
+
+        CodigoIngresado = codigo;
+        AgregarPorCodigoCommand.Execute(null);
+    }
+
+    // Lo llama la ventana al cerrarse, para liberar el puerto del lector
+    public void LiberarDispositivos() => _lector.Detener();
 
     // El aviso de stock bajo solo lo ve quien puede corregirlo
     private async Task ActualizarAvisoStockAsync()
