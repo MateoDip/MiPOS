@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Negocio.Cajas;
+using MiPOS.Negocio.Facturacion;
 using MiPOS.Negocio.Ventas;
 using MiPOS.Seguridad;
 using MiPOS.WPF.ViewModels;
@@ -238,6 +239,26 @@ public class DialogoServicio
         return new ProveedorEdicionVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog() == true
             ? viewModel.ProveedorGuardado
             : null;
+    }
+
+    // F2 en el cobro: a quién se factura. Devuelve el cliente elegido, o null si se canceló.
+    public DatosReceptor? PedirReceptor(DatosReceptor actual)
+    {
+        var viewModel = _proveedor.GetRequiredService<ClienteFacturaViewModel>();
+        viewModel.Iniciar(actual);
+
+        return new ClienteFacturaVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog() == true
+            ? viewModel.ReceptorElegido
+            : null;
+    }
+
+    // Ctrl+F: facturas sin autorizar
+    public void VerFacturasPendientes()
+    {
+        var viewModel = _proveedor.GetRequiredService<FacturasPendientesViewModel>();
+        viewModel.Iniciar();
+
+        new FacturasPendientesVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog();
     }
 
     // El diálogo nuevo queda encima de la ventana que se está usando

@@ -20,7 +20,7 @@ public class ImpresoraArchivo : IImpresoraTicket
     // Ruta del último archivo guardado (para mostrarla en pruebas)
     public string? UltimoArchivo { get; private set; }
 
-    public async Task ImprimirAsync(IReadOnlyList<string> lineas, string nombreTrabajo)
+    public async Task ImprimirAsync(IReadOnlyList<string> lineas, string nombreTrabajo, string? codigoQr = null)
     {
         _opciones.Validar();
 
@@ -36,7 +36,9 @@ public class ImpresoraArchivo : IImpresoraTicket
             var nombre = string.Concat(nombreTrabajo.Select(c => char.IsLetterOrDigit(c) ? c : '_'));
             var ruta = Path.Combine(carpeta, $"{DateTime.Now:yyyy-MM-dd_HH-mm-ss}_{nombre}.txt");
 
-            await File.WriteAllLinesAsync(ruta, lineas, Encoding.UTF8);
+            // En un archivo de texto no se puede dibujar el QR: se escribe su contenido
+            var contenido = codigoQr is null ? lineas : lineas.Append(string.Empty).Append("[Código QR]").Append(codigoQr);
+            await File.WriteAllLinesAsync(ruta, contenido, Encoding.UTF8);
             UltimoArchivo = ruta;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

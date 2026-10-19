@@ -2,6 +2,8 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MiPOS.Dominio.Entidades;
+using MiPOS.Facturacion;
+using MiPOS.Negocio.Facturacion;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Negocio.Ventas;
 using MiPOS.WPF.Servicios;
@@ -11,11 +13,15 @@ namespace MiPOS.WPF.ViewModels;
 public partial class CobroViewModel : ObservableObject
 {
     private readonly VentaServicio _ventaServicio;
+    private readonly FacturacionServicio _facturacionServicio;
+    private readonly DialogoServicio _dialogos;
     private Carrito? _carrito;
 
-    public CobroViewModel(VentaServicio ventaServicio)
+    public CobroViewModel(VentaServicio ventaServicio, FacturacionServicio facturacionServicio, DialogoServicio dialogos)
     {
         _ventaServicio = ventaServicio;
+        _facturacionServicio = facturacionServicio;
+        _dialogos = dialogos;
     }
 
     // true = venta registrada, false = cerró sin cobrar. La ventana se cierra al recibirlo.
@@ -39,6 +45,16 @@ public partial class CobroViewModel : ObservableObject
 
     [ObservableProperty]
     private string pagaCon = string.Empty;
+
+    // A quién se factura (por defecto, consumidor final). Se cambia con F2.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(TextoComprobante))]
+    private DatosReceptor receptor = DatosReceptor.ConsumidorFinal;
+
+    public bool FacturacionActiva => _facturacionServicio.EstaActiva;
+
+    // Ej: "Factura B · Consumidor final"
+    public string TextoComprobante => FacturacionActiva ? _facturacionServicio.Describir(Receptor) : string.Empty;
 
     // Texto que se muestra debajo de "Paga con": el vuelto o lo que falta
     [ObservableProperty]
@@ -111,6 +127,20 @@ public partial class CobroViewModel : ObservableObject
         MedioSeleccionado = MediosPago[posicion];
     }
 
+    // F2: identificar al cliente (DNI o CUIT), por ejemplo para una Factura A
+    [RelayCommand]
+    private void IdentificarCliente()
+    {
+        if (!FacturacionActiva || Guardando)
+            return;
+
+        if (_dialogos.PedirReceptor(Receptor) is { } elegido)
+        {
+            Receptor = elegido;
+            Mensaje = string.Empty;
+        }
+    }
+
     // Enter: registrar la venta. Mientras se guarda, otro Enter no hace nada
     // (el Toolkit no deja ejecutar el comando dos veces al mismo tiempo).
     [RelayCommand]
@@ -142,9 +172,10 @@ public partial class CobroViewModel : ObservableObject
         {
             Guardando = true;
             Mensaje = "Registrando venta...";
-            VentaRegistrada = await _ventaServicio.RegistrarAsync(_carrito, MedioSeleccionado.Id, montoRecibido);
+            VentaRegistrada = await _ventaServicio.RegistrarAsync(_carrito, MedioSeleccionado.Id, montoRecibido,
+                FacturacionActiva ? Receptor : null);
         }
-        catch (VentaInvalidaException ex)
+        catch (Exception ex) when (ex is VentaInvalidaException or FacturaInvalidaException or FacturacionException)
         {
             Mensaje = ex.Message;
         }

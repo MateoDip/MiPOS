@@ -5,7 +5,11 @@ public class Producto
     public int Id { get; set; }
     public string CodigoBarras { get; set; } = string.Empty;
     public string Nombre { get; set; } = string.Empty;
+    // Precio final al público (con IVA incluido)
     public decimal Precio { get; set; }
+
+    // IVA del producto, para la factura electrónica (la mayoría: 21%)
+    public AlicuotaIva AlicuotaIva { get; set; } = AlicuotaIva.Iva21;
     public bool Activo { get; set; } = true;
 
     // Unidades disponibles. Puede quedar negativo si se vende algo que

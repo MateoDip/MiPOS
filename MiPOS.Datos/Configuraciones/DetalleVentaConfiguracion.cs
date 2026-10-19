@@ -18,6 +18,7 @@ public class DetalleVentaConfiguracion : IEntityTypeConfiguration<DetalleVenta>
 
         builder.Property(d => d.PrecioUnitario).HasPrecision(18, 2);
         builder.Property(d => d.Subtotal).HasPrecision(18, 2);
+        builder.Property(d => d.AlicuotaIva).HasConversion<int>();
 
         // Una venta tiene muchos detalles. Restrict: las ventas no se borran.
         builder.HasOne(d => d.Venta)

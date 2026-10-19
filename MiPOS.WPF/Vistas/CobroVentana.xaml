@@ -1,4 +1,4 @@
-<Window x:Class="MiPOS.WPF.Vistas.CobroVentana"
+﻿<Window x:Class="MiPOS.WPF.Vistas.CobroVentana"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -24,11 +24,18 @@
         <KeyBinding Key="Down"   Command="{Binding BajarCommand}"/>
         <KeyBinding Key="Enter"  Command="{Binding ConfirmarCommand}"/>
         <KeyBinding Key="Escape" Command="{Binding CancelarCommand}"/>
+        <KeyBinding Key="F2"     Command="{Binding IdentificarClienteCommand}"/>
     </Window.InputBindings>
 
     <StackPanel Margin="16">
         <TextBlock Text="{Binding Total, StringFormat='TOTAL: $ {0:N2}'}"
                    FontSize="36" FontWeight="Bold" HorizontalAlignment="Right"/>
+
+        <!-- Solo con la factura electrónica activa: qué comprobante se va a emitir -->
+        <DockPanel Margin="0,12,0,0" Visibility="{Binding FacturacionActiva, Converter={StaticResource VisibleSiEsTrue}}">
+            <TextBlock DockPanel.Dock="Right" Text="F2: cliente" Foreground="Gray" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding TextoComprobante}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+        </DockPanel>
 
         <TextBlock Text="Medio de pago" Margin="0,12,0,4"/>
         <ListBox ItemsSource="{Binding MediosPago}"

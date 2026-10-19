@@ -185,6 +185,9 @@ namespace MiPOS.Datos.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
+                    b.Property<int>("AlicuotaIva")
+                        .HasColumnType("int");
+
                     b.Property<int>("Cantidad")
                         .HasColumnType("int");
 
@@ -214,6 +217,126 @@ namespace MiPOS.Datos.Migrations
                     b.HasIndex("VentaId");
 
                     b.ToTable("DetallesVenta", (string)null);
+                });
+
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.Factura", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Cae")
+                        .HasMaxLength(14)
+                        .HasColumnType("nvarchar(14)");
+
+                    b.Property<long>("DocNumero")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("DocTipo")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Entorno")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("Estado")
+                        .HasColumnType("int");
+
+                    b.Property<DateOnly?>("Fecha")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("datetime2");
+
+                    b.Property<decimal>("ImporteExento")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("ImporteIva")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("ImporteNeto")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("Intentos")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Mensaje")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<long>("Numero")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("PuntoVenta")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReceptorCondicionIva")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ReceptorNombre")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("Tipo")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateOnly?>("VencimientoCae")
+                        .HasColumnType("date");
+
+                    b.Property<int>("VentaId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Estado");
+
+                    b.HasIndex("VentaId")
+                        .IsUnique();
+
+                    b.HasIndex("Entorno", "PuntoVenta", "Tipo", "Numero")
+                        .IsUnique()
+                        .HasFilter("[Estado] = 2");
+
+                    b.ToTable("Facturas", (string)null);
+                });
+
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.FacturaIva", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("Alicuota")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("BaseImponible")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("FacturaId")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("Importe")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FacturaId");
+
+                    b.ToTable("FacturasIva", (string)null);
                 });
 
             modelBuilder.Entity("MiPOS.Dominio.Entidades.MedioPago", b =>
@@ -387,6 +510,9 @@ namespace MiPOS.Datos.Migrations
                     b.Property<bool>("Activo")
                         .HasColumnType("bit");
 
+                    b.Property<int>("AlicuotaIva")
+                        .HasColumnType("int");
+
                     b.Property<int>("CategoriaId")
                         .HasColumnType("int");
 
@@ -426,6 +552,7 @@ namespace MiPOS.Datos.Migrations
                         {
                             Id = 1,
                             Activo = true,
+                            AlicuotaIva = 5,
                             CategoriaId = 2,
                             CodigoBarras = "7791234",
                             Nombre = "Coca Cola 2.25L",
@@ -437,6 +564,7 @@ namespace MiPOS.Datos.Migrations
                         {
                             Id = 2,
                             Activo = true,
+                            AlicuotaIva = 5,
                             CategoriaId = 1,
                             CodigoBarras = "7795678",
                             Nombre = "Arroz 1Kg",
@@ -448,6 +576,7 @@ namespace MiPOS.Datos.Migrations
                         {
                             Id = 3,
                             Activo = true,
+                            AlicuotaIva = 5,
                             CategoriaId = 3,
                             CodigoBarras = "7798912",
                             Nombre = "Detergente",
@@ -708,6 +837,28 @@ namespace MiPOS.Datos.Migrations
                     b.Navigation("Venta");
                 });
 
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.Factura", b =>
+                {
+                    b.HasOne("MiPOS.Dominio.Entidades.Venta", "Venta")
+                        .WithOne("Factura")
+                        .HasForeignKey("MiPOS.Dominio.Entidades.Factura", "VentaId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Venta");
+                });
+
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.FacturaIva", b =>
+                {
+                    b.HasOne("MiPOS.Dominio.Entidades.Factura", "Factura")
+                        .WithMany("Alicuotas")
+                        .HasForeignKey("FacturaId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Factura");
+                });
+
             modelBuilder.Entity("MiPOS.Dominio.Entidades.MovimientoCaja", b =>
                 {
                     b.HasOne("MiPOS.Dominio.Entidades.Usuario", "AutorizadoPor")
@@ -847,6 +998,11 @@ namespace MiPOS.Datos.Migrations
                     b.Navigation("Detalles");
                 });
 
+            modelBuilder.Entity("MiPOS.Dominio.Entidades.Factura", b =>
+                {
+                    b.Navigation("Alicuotas");
+                });
+
             modelBuilder.Entity("MiPOS.Dominio.Entidades.TurnoCaja", b =>
                 {
                     b.Navigation("Movimientos");
@@ -855,6 +1011,8 @@ namespace MiPOS.Datos.Migrations
             modelBuilder.Entity("MiPOS.Dominio.Entidades.Venta", b =>
                 {
                     b.Navigation("Detalles");
+
+                    b.Navigation("Factura");
                 });
 #pragma warning restore 612, 618
         }

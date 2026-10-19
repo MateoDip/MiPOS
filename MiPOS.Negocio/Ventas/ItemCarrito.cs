@@ -18,6 +18,7 @@ public class ItemCarrito : INotifyPropertyChanged
         CodigoBarras = producto.CodigoBarras;
         Nombre = producto.Nombre;
         PrecioUnitario = producto.Precio; // se "congela" el precio al momento de agregarlo
+        AlicuotaIva = producto.AlicuotaIva;
         _cantidad = cantidad;
     }
 
@@ -25,6 +26,7 @@ public class ItemCarrito : INotifyPropertyChanged
     public string CodigoBarras { get; }
     public string Nombre { get; }
     public decimal PrecioUnitario { get; }
+    public AlicuotaIva AlicuotaIva { get; }
 
     public int Cantidad
     {

@@ -2,8 +2,10 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MiPOS.Dominio.Entidades;
+using MiPOS.Facturacion;
 using MiPOS.Hardware.Impresion;
 using MiPOS.Negocio.Cajas;
+using MiPOS.Negocio.Facturacion;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Negocio.Ventas;
 using MiPOS.Seguridad;
@@ -26,6 +28,7 @@ public partial class CajaViewModel : ObservableObject
     private readonly TicketServicio _ticketServicio;
     private readonly CajaServicio _cajaServicio;
     private readonly StockServicio _stockServicio;
+    private readonly FacturacionServicio _facturacionServicio;
     private readonly IImpresoraTicket _impresora;
     private readonly DialogoServicio _dialogos;
     private readonly Sesion _sesion;
@@ -33,7 +36,8 @@ public partial class CajaViewModel : ObservableObject
 
     public CajaViewModel(ProductoServicio productoServicio, UsuarioServicio usuarioServicio,
                          VentaServicio ventaServicio, TicketServicio ticketServicio, CajaServicio cajaServicio,
-                         StockServicio stockServicio, IImpresoraTicket impresora, DialogoServicio dialogos, Sesion sesion)
+                         StockServicio stockServicio, FacturacionServicio facturacionServicio,
+                         IImpresoraTicket impresora, DialogoServicio dialogos, Sesion sesion)
     {
         _productoServicio = productoServicio;
         _usuarioServicio = usuarioServicio;
@@ -41,6 +45,7 @@ public partial class CajaViewModel : ObservableObject
         _ticketServicio = ticketServicio;
         _cajaServicio = cajaServicio;
         _stockServicio = stockServicio;
+        _facturacionServicio = facturacionServicio;
         _impresora = impresora;
         _dialogos = dialogos;
         _sesion = sesion;
@@ -102,6 +107,10 @@ public partial class CajaViewModel : ObservableObject
     // Solo para quien gestiona el stock: "3 productos con stock bajo · Ctrl+P" (vacío si no hay)
     [ObservableProperty]
     private string avisoStock = string.Empty;
+
+    // "2 facturas sin autorizar · Ctrl+F" (vacío si no hay o si la facturación está desactivada)
+    [ObservableProperty]
+    private string avisoFacturas = string.Empty;
 
     // Cuando cambia el producto seleccionado, se re-evalúa si se puede eliminar o cambiar cantidad
     [ObservableProperty]
@@ -206,9 +215,9 @@ public partial class CajaViewModel : ObservableObject
                 : $"Venta N° {venta.Id} registrada.";
             ActualizarTotales();
 
-            // Se imprime sin esperar: el cajero puede empezar la próxima venta mientras sale el ticket.
-            // Si falla, la venta ya está registrada igual y se avisa para reimprimir con F8.
-            _ = ImprimirTicketAsync(venta.Id, esReimpresion: false);
+            // Se factura e imprime sin esperar: el cajero puede empezar la próxima venta mientras sale el ticket.
+            // Si falla, la venta ya está registrada igual y se avisa (factura pendiente, o reimprimir con F8).
+            _ = FacturarEImprimirAsync(venta.Id);
             _ = ActualizarAvisoStockAsync();
         }
 
@@ -240,13 +249,59 @@ public partial class CajaViewModel : ObservableObject
         AccionTerminada?.Invoke();
     }
 
+    // Pide el CAE de la factura (si la facturación está activa) y después imprime el ticket.
+    // Sin conexión con ARCA, la factura queda pendiente y el ticket sale como "pendiente de autorización".
+    private async Task FacturarEImprimirAsync(int ventaId)
+    {
+        if (_facturacionServicio.EstaActiva)
+        {
+            try
+            {
+                await _facturacionServicio.AutorizarVentaAsync(ventaId);
+
+                // Hay conexión: se aprovecha para autorizar las que hayan quedado pendientes antes
+                _ = AutorizarPendientesEnSegundoPlanoAsync();
+            }
+            catch (FacturacionException ex)
+            {
+                Mensaje = $"Venta N° {ventaId} registrada, pero la factura quedó PENDIENTE: {ex.Message} Se puede reintentar con Ctrl+F.";
+            }
+            catch (FacturaInvalidaException ex)
+            {
+                Mensaje = $"Venta N° {ventaId} registrada, pero la factura no se emitió: {ex.Message} Avise a un administrador (Ctrl+F).";
+            }
+            catch (Exception)
+            {
+                Mensaje = $"Venta N° {ventaId} registrada, pero no se pudo pedir la factura. Reintente con Ctrl+F.";
+            }
+
+            await ActualizarAvisoFacturasAsync();
+        }
+
+        await ImprimirTicketAsync(ventaId, esReimpresion: false);
+    }
+
+    private async Task AutorizarPendientesEnSegundoPlanoAsync()
+    {
+        try
+        {
+            var resultado = await _facturacionServicio.AutorizarPendientesAsync();
+            if (resultado.Autorizadas > 0)
+                await ActualizarAvisoFacturasAsync();
+        }
+        catch (Exception)
+        {
+            // Se vuelve a intentar con la próxima venta o desde Ctrl+F
+        }
+    }
+
     // Arma el ticket desde la venta guardada y lo manda a la impresora configurada
     private async Task ImprimirTicketAsync(int ventaId, bool esReimpresion)
     {
         try
         {
-            var lineas = await _ticketServicio.ArmarAsync(ventaId, _impresora.CaracteresPorLinea, esReimpresion);
-            await _impresora.ImprimirAsync(lineas, $"Venta {ventaId}");
+            var ticket = await _ticketServicio.ArmarAsync(ventaId, _impresora.CaracteresPorLinea, esReimpresion);
+            await _impresora.ImprimirAsync(ticket.Lineas, $"Venta {ventaId}", ticket.CodigoQr);
 
             if (esReimpresion)
                 MensajeExito = $"Ticket de la venta N° {ventaId} reimpreso.";
@@ -271,6 +326,7 @@ public partial class CajaViewModel : ObservableObject
             Turno = await _cajaServicio.ObtenerTurnoAbiertoAsync();
 
             await ActualizarAvisoStockAsync();
+            await ActualizarAvisoFacturasAsync();
 
             if (!CajaAbierta)
                 await AbrirCajaAsync();
@@ -574,6 +630,38 @@ public partial class CajaViewModel : ObservableObject
         {
             // El aviso no es imprescindible: si falla la consulta, no se muestra
             AvisoStock = string.Empty;
+        }
+    }
+
+    // Ctrl+F: facturas pendientes de autorización (cualquier usuario puede reintentar)
+    [RelayCommand(CanExecute = nameof(FacturacionActiva))]
+    private async Task VerFacturasPendientesAsync()
+    {
+        _dialogos.VerFacturasPendientes();
+        await ActualizarAvisoFacturasAsync();
+        AccionTerminada?.Invoke();
+    }
+
+    private bool FacturacionActiva() => _facturacionServicio.EstaActiva;
+
+    private async Task ActualizarAvisoFacturasAsync()
+    {
+        if (!_facturacionServicio.EstaActiva)
+            return;
+
+        try
+        {
+            var cantidad = await _facturacionServicio.ContarSinAutorizarAsync();
+            AvisoFacturas = cantidad switch
+            {
+                0 => string.Empty,
+                1 => "1 factura sin autorizar · Ctrl+F",
+                _ => $"{cantidad} facturas sin autorizar · Ctrl+F"
+            };
+        }
+        catch (Exception)
+        {
+            // El aviso no es imprescindible
         }
     }
 

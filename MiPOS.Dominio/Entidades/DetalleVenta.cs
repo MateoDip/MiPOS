@@ -23,4 +23,7 @@ public class DetalleVenta
     public decimal PrecioUnitario { get; set; }
 
     public decimal Subtotal { get; set; }
+
+    // Copia del IVA del producto al momento de vender (como el nombre y el precio)
+    public AlicuotaIva AlicuotaIva { get; set; } = AlicuotaIva.Iva21;
 }

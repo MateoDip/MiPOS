@@ -2,6 +2,7 @@
 using MiPOS.Datos;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Negocio.Cajas;
+using MiPOS.Negocio.Facturacion;
 using MiPOS.Negocio.Ventas;
 using MiPOS.Seguridad;
 
@@ -12,12 +13,15 @@ public class VentaServicio
     private readonly IDbContextFactory<MiPOSDbContext> _fabrica;
     private readonly Sesion _sesion;
     private readonly OpcionesCaja _opcionesCaja;
+    private readonly FacturacionServicio _facturacion;
 
-    public VentaServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion, OpcionesCaja opcionesCaja)
+    public VentaServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion, OpcionesCaja opcionesCaja,
+                         FacturacionServicio facturacion)
     {
         _fabrica = fabrica;
         _sesion = sesion;
         _opcionesCaja = opcionesCaja;
+        _facturacion = facturacion;
     }
 
     public async Task<List<MedioPago>> ObtenerMediosPagoAsync()
@@ -46,8 +50,11 @@ public class VentaServicio
     /// <summary>
     /// Valida y guarda la venta con todos sus detalles.
     /// montoRecibido solo se usa en efectivo (en los demás medios se ignora).
+    /// receptor: a quién se factura (null = consumidor final). Si la facturación está activa,
+    /// la factura queda guardada como pendiente; el CAE se pide después (FacturacionServicio).
     /// </summary>
-    public async Task<Venta> RegistrarAsync(Carrito carrito, int medioPagoId, decimal? montoRecibido)
+    public async Task<Venta> RegistrarAsync(Carrito carrito, int medioPagoId, decimal? montoRecibido,
+                                            DatosReceptor? receptor = null)
     {
         // Toda venta queda registrada a nombre del usuario conectado
         var usuario = _sesion.UsuarioActual
@@ -75,9 +82,13 @@ public class VentaServicio
                 NombreProducto = i.Nombre,
                 Cantidad = i.Cantidad,
                 PrecioUnitario = i.PrecioUnitario,
-                Subtotal = i.Subtotal
+                Subtotal = i.Subtotal,
+                AlicuotaIva = i.AlicuotaIva
             }).ToList()
         };
+
+        // La factura (si la facturación está activa) se guarda con la venta, como pendiente
+        venta.Factura = _facturacion.PrepararFactura(venta, receptor);
 
         await using var contexto = await _fabrica.CreateDbContextAsync();
 

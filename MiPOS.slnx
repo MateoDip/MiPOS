@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="MiPOS.Datos/MiPOS.Datos.csproj" />
   <Project Path="MiPOS.Dominio/MiPOS.Dominio.csproj" />
+  <Project Path="MiPOS.Facturacion/MiPOS.Facturacion.csproj" />
   <Project Path="MiPOS.Hardware/MiPOS.Hardware.csproj" />
   <Project Path="MiPOS.Negocio/MiPOS.Negocio.csproj" />
   <Project Path="MiPOS.Pruebas/MiPOS.Pruebas.csproj" />

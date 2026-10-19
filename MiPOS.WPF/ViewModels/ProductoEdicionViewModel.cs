@@ -1,13 +1,17 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MiPOS.Dominio.Entidades;
+using MiPOS.Negocio.Facturacion;
 using MiPOS.Negocio.Productos;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Seguridad;
 using MiPOS.WPF.Servicios;
 
 namespace MiPOS.WPF.ViewModels;
+
+// Una opción de la lista de alícuotas de IVA
+public record OpcionAlicuota(AlicuotaIva Valor, string Nombre);
 
 /// <summary>
 /// Alta de un producto nuevo o edición de uno existente.
@@ -41,6 +45,13 @@ public partial class ProductoEdicionViewModel : ObservableObject
 
     public ObservableCollection<Categoria> Categorias { get; } = new();
 
+    // IVA del producto, con el nombre para mostrar (ej: "21%")
+    public IReadOnlyList<OpcionAlicuota> Alicuotas { get; } = new[]
+    {
+        AlicuotaIva.Iva21, AlicuotaIva.Iva10_5, AlicuotaIva.Iva27, AlicuotaIva.Iva5,
+        AlicuotaIva.Iva2_5, AlicuotaIva.Iva0, AlicuotaIva.Exento
+    }.Select(a => new OpcionAlicuota(a, CalculadoraFactura.Nombre(a))).ToList();
+
     // El producto guardado (solo si se guardó)
     public Producto? ProductoGuardado { get; private set; }
 
@@ -59,6 +70,9 @@ public partial class ProductoEdicionViewModel : ObservableObject
     private string precio = string.Empty;
 
     [ObservableProperty]
+    private OpcionAlicuota? alicuotaSeleccionada;
+
+    [ObservableProperty]
     private string stockMinimo = "0";
 
     [ObservableProperty]
@@ -71,6 +85,7 @@ public partial class ProductoEdicionViewModel : ObservableObject
     public void IniciarNuevo()
     {
         _id = null;
+        AlicuotaSeleccionada = Alicuotas[0];
         _ = CargarCategoriasAsync();
     }
 
@@ -82,6 +97,7 @@ public partial class ProductoEdicionViewModel : ObservableObject
         Nombre = producto.Nombre;
         Precio = producto.Precio.ToString("0.##");
         StockMinimo = producto.StockMinimo.ToString();
+        AlicuotaSeleccionada = Alicuotas.FirstOrDefault(a => a.Valor == producto.AlicuotaIva) ?? Alicuotas[0];
         ProductoGuardado = null;
         _ = CargarCategoriasAsync();
     }
@@ -174,7 +190,8 @@ public partial class ProductoEdicionViewModel : ObservableObject
             return;
         }
 
-        var datos = new DatosProducto(CodigoBarras, Nombre, CategoriaSeleccionada.Id, precioLeido, minimo);
+        var datos = new DatosProducto(CodigoBarras, Nombre, CategoriaSeleccionada.Id, precioLeido, minimo,
+            AlicuotaSeleccionada?.Valor ?? AlicuotaIva.Iva21);
 
         try
         {

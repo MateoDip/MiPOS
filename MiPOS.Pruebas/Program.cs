@@ -12,6 +12,9 @@ using MiPOS.Negocio.Ventas;
 using MiPOS.Negocio.Productos;
 using MiPOS.Negocio.Compras;
 using MiPOS.Negocio.Comun;
+using MiPOS.Negocio.Facturacion;
+using MiPOS.Facturacion;
+using MiPOS.Facturacion.Arca;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -98,7 +101,7 @@ var comercioEjemplo = new DatosComercio
 foreach (var ancho in new[] { 42, 32 })
 {
     Console.WriteLine($"\n=== Ticket de {ancho} caracteres ===");
-    var lineasTicket = TicketVenta.Armar(ventaEjemplo, comercioEjemplo, ancho, esReimpresion: ancho == 32);
+    var lineasTicket = TicketVenta.Armar(ventaEjemplo, comercioEjemplo, new DatosFiscales(), ancho, esReimpresion: ancho == 32);
     foreach (var linea in lineasTicket)
         Console.WriteLine($"|{linea.PadRight(ancho)}|");
 
@@ -109,8 +112,9 @@ foreach (var ancho in new[] { 42, 32 })
 // --- Prueba 8: impresoras ---
 Console.WriteLine("\n=== Impresoras ===");
 var impresoraArchivo = new ImpresoraArchivo(new OpcionesImpresion { Modo = ModoImpresion.Archivo, CaracteresPorLinea = 42 });
-await impresoraArchivo.ImprimirAsync(TicketVenta.Armar(ventaEjemplo, comercioEjemplo, 42, false), "Venta 15");
+await impresoraArchivo.ImprimirAsync(TicketVenta.Armar(ventaEjemplo, comercioEjemplo, new DatosFiscales(), 42, false), "Venta 15", "https://www.afip.gob.ar/fe/qr/?p=prueba");
 Console.WriteLine($"Ticket guardado en archivo: {(File.Exists(impresoraArchivo.UltimoArchivo) ? "OK" : "ERROR")} ({impresoraArchivo.UltimoArchivo})");
+Console.WriteLine($"El archivo incluye el texto del QR: {(File.ReadAllText(impresoraArchivo.UltimoArchivo!).Contains("[Código QR]") ? "OK" : "ERROR")}");
 
 try
 {
@@ -159,6 +163,7 @@ await using (var contexto = await fabrica.CreateDbContextAsync())
     {
         await ProbarCajaAsync(fabrica, administrador);
         await ProbarProductosYStockAsync(fabrica, administrador);
+        await ProbarFacturacionAsync(fabrica, administrador);
     }
 
     // La caja de pruebas queda desactivada para que no aparezca en el sistema
@@ -171,7 +176,7 @@ static async Task ProbarCajaAsync(PooledDbContextFactory<MiPOSDbContext> fabrica
     sesion.Iniciar(administrador);
     var opcionesCaja = new OpcionesCaja { Numero = 99 };
     var cajaServicio = new CajaServicio(fabrica, sesion, opcionesCaja);
-    var ventaServicio = new VentaServicio(fabrica, sesion, opcionesCaja);
+    var ventaServicio = new VentaServicio(fabrica, sesion, opcionesCaja, FacturacionDesactivada(fabrica, sesion));
     var productoServicio = new ProductoServicio(fabrica, sesion);
 
     // Si quedó abierta de una prueba anterior que falló, se cierra
@@ -366,6 +371,239 @@ static async Task ProbarComprasAsync(PooledDbContextFactory<MiPOSDbContext> fabr
     await compraServicio.CambiarActivoProveedorAsync(proveedor.Id, false);
     await Esperar<CompraInvalidaException>("Comprar a un proveedor desactivado da error",
         () => compraServicio.RegistrarAsync(proveedor.Id, null, items));
+}
+
+// --- Prueba 12: facturación electrónica ---
+// Las partes sin base (cálculo de IVA, mensajes para ARCA, firma) y el circuito completo
+// en modo Simulada contra la base real (en la caja 99, con un punto de venta al azar)
+static async Task ProbarFacturacionAsync(PooledDbContextFactory<MiPOSDbContext> fabrica, Usuario administrador)
+{
+    Console.WriteLine("\n=== Facturación: tipo de comprobante ===");
+    Console.WriteLine($"Monotributo a consumidor final = C: {(CalculadoraFactura.DeterminarTipo(CondicionIva.Monotributo, CondicionIva.ConsumidorFinal) == TipoComprobante.FacturaC ? "OK" : "ERROR")}");
+    Console.WriteLine($"Inscripto a consumidor final = B: {(CalculadoraFactura.DeterminarTipo(CondicionIva.ResponsableInscripto, CondicionIva.ConsumidorFinal) == TipoComprobante.FacturaB ? "OK" : "ERROR")}");
+    Console.WriteLine($"Inscripto a inscripto = A: {(CalculadoraFactura.DeterminarTipo(CondicionIva.ResponsableInscripto, CondicionIva.ResponsableInscripto) == TipoComprobante.FacturaA ? "OK" : "ERROR")}");
+    Console.WriteLine($"Inscripto a monotributista = A: {(CalculadoraFactura.DeterminarTipo(CondicionIva.ResponsableInscripto, CondicionIva.Monotributo) == TipoComprobante.FacturaA ? "OK" : "ERROR")}");
+    Console.WriteLine($"Inscripto a exento = B: {(CalculadoraFactura.DeterminarTipo(CondicionIva.ResponsableInscripto, CondicionIva.Exento) == TipoComprobante.FacturaB ? "OK" : "ERROR")}");
+
+    Console.WriteLine("\n=== Facturación: cálculo del IVA ===");
+    var lineas = new[] { (AlicuotaIva.Iva21, 1210m), (AlicuotaIva.Iva10_5, 1105m) };
+    var sinDescuento = CalculadoraFactura.Calcular(TipoComprobante.FacturaB, lineas, 0);
+    Console.WriteLine($"Sin descuento: neto 2.000, IVA 315, total 2.315: {(sinDescuento is { Neto: 2000m, Iva: 315m, Total: 2315m, Exento: 0m } ? "OK" : $"ERROR ({sinDescuento.Neto}/{sinDescuento.Iva}/{sinDescuento.Total})")}");
+
+    var conDescuento = CalculadoraFactura.Calcular(TipoComprobante.FacturaB, lineas, 231.50m);
+    Console.WriteLine($"Con 10% de descuento: neto 1.800, IVA 283,50, total 2.083,50: {(conDescuento is { Neto: 1800m, Iva: 283.50m, Total: 2083.50m } ? "OK" : $"ERROR ({conDescuento.Neto}/{conDescuento.Iva}/{conDescuento.Total})")}");
+    Console.WriteLine($"IVA 21% = 189 y 10,5% = 94,50: {(conDescuento.Alicuotas.Single(a => a.Alicuota == AlicuotaIva.Iva21).Importe == 189m && conDescuento.Alicuotas.Single(a => a.Alicuota == AlicuotaIva.Iva10_5).Importe == 94.50m ? "OK" : "ERROR")}");
+
+    var redondeo = CalculadoraFactura.Calcular(TipoComprobante.FacturaB,
+        new[] { (AlicuotaIva.Iva21, 999.99m), (AlicuotaIva.Iva10_5, 333.33m), (AlicuotaIva.Exento, 100m) }, 142.33m);
+    Console.WriteLine($"Con redondeos, neto + exento + IVA = total exacto: {(redondeo.Neto + redondeo.Exento + redondeo.Iva == redondeo.Total && redondeo.Total == 1290.99m ? "OK" : "ERROR")}");
+    Console.WriteLine($"Cada alícuota: IVA = base x tasa (±1 centavo): {(redondeo.Alicuotas.All(a => Math.Abs(a.Importe - a.BaseImponible * CalculadoraFactura.Tasa(a.Alicuota)) <= 0.01m) ? "OK" : "ERROR")}");
+
+    var facturaC = CalculadoraFactura.Calcular(TipoComprobante.FacturaC, lineas, 0);
+    Console.WriteLine($"Factura C sin IVA discriminado: {(facturaC is { Neto: 2315m, Iva: 0m } && facturaC.Alicuotas.Count == 0 ? "OK" : "ERROR")}");
+
+    Console.WriteLine("\n=== Facturación: cliente ===");
+    var cf = DatosReceptor.Crear("", null, CondicionIva.ConsumidorFinal);
+    Console.WriteLine($"Vacío = consumidor final sin identificar (99/0): {(cf.DocTipo == 99 && cf.DocNumero == 0 ? "OK" : "ERROR")}");
+    var conDni = DatosReceptor.Crear("30.123.456", "Ana", CondicionIva.ConsumidorFinal);
+    Console.WriteLine($"DNI con puntos: {(conDni.DocTipo == 96 && conDni.DocNumero == 30123456 ? "OK" : "ERROR")}");
+    var conCuit = DatosReceptor.Crear("20-12345678-6", "Juan SA", CondicionIva.ResponsableInscripto);
+    Console.WriteLine($"CUIT: {(conCuit.DocTipo == 80 && conCuit.DocNumero == 20123456786 ? "OK" : "ERROR")}");
+    Esperar2<FacturaInvalidaException>("Inscripto sin CUIT da error", () => DatosReceptor.Crear("", null, CondicionIva.ResponsableInscripto));
+    Esperar2<FacturaInvalidaException>("Inscripto con DNI da error", () => DatosReceptor.Crear("30123456", null, CondicionIva.ResponsableInscripto));
+    Esperar2<FacturaInvalidaException>("CUIT con verificador mal da error", () => DatosReceptor.Crear("20-12345678-0", null, CondicionIva.ResponsableInscripto));
+
+    Console.WriteLine("\n=== Facturación: mensajes para ARCA ===");
+    var solicitud = new SolicitudCae
+    {
+        PuntoVenta = 3, TipoComprobante = 6, Numero = 125, Fecha = new DateOnly(2026, 10, 18),
+        DocTipo = 99, DocNumero = 0, CondicionIvaReceptor = 5,
+        ImporteTotal = 2315m, ImporteNeto = 2000m, ImporteIva = 315m,
+        Alicuotas = [new AlicuotaArca(5, 1000m, 210m), new AlicuotaArca(4, 1000m, 105m)]
+    };
+    var pedido = ServicioArcaWs.ArmarPedidoCae(solicitud);
+    var fe = ServicioArcaWs.Fe;
+    var detalle = pedido.Element(fe + "FeDetReq")!.Element(fe + "FECAEDetRequest")!;
+    var orden = detalle.Elements().Select(e => e.Name.LocalName).ToList();
+    var ordenEsperado = new[] { "Concepto", "DocTipo", "DocNro", "CbteDesde", "CbteHasta", "CbteFch", "ImpTotal", "ImpTotConc", "ImpNeto", "ImpOpEx", "ImpTrib", "ImpIVA", "MonId", "MonCotiz", "CondicionIVAReceptorId", "Iva" };
+    Console.WriteLine($"Orden de los campos como pide ARCA: {(orden.SequenceEqual(ordenEsperado) ? "OK" : "ERROR (" + string.Join(",", orden) + ")")}");
+    Console.WriteLine($"Importes con punto decimal: {(detalle.Element(fe + "ImpTotal")!.Value == "2315.00" ? "OK" : "ERROR")}");
+    Console.WriteLine($"Fecha yyyyMMdd: {(detalle.Element(fe + "CbteFch")!.Value == "20261018" ? "OK" : "ERROR")}");
+    Console.WriteLine($"Dos alícuotas de IVA: {(detalle.Element(fe + "Iva")!.Elements().Count() == 2 ? "OK" : "ERROR")}");
+    var pedidoC = ServicioArcaWs.ArmarPedidoCae(new SolicitudCae { TipoComprobante = 11, Fecha = new DateOnly(2026, 10, 18), ImporteTotal = 100, ImporteNeto = 100 });
+    Console.WriteLine($"Factura C sin bloque de IVA: {(pedidoC.Descendants(fe + "Iva").Any() ? "ERROR" : "OK")}");
+
+    var aprobada = System.Xml.Linq.XElement.Parse($"""
+        <FECAESolicitarResult xmlns="{fe.NamespaceName}">
+          <FeCabResp><Resultado>A</Resultado></FeCabResp>
+          <FeDetResp><FECAEDetResponse>
+            <Resultado>A</Resultado><CAE>76123456789012</CAE><CAEFchVto>20261028</CAEFchVto>
+            <Observaciones><Obs><Code>10217</Code><Msg>Observación de prueba</Msg></Obs></Observaciones>
+          </FECAEDetResponse></FeDetResp>
+        </FECAESolicitarResult>
+        """);
+    var respuesta = ServicioArcaWs.LeerRespuestaCae(aprobada);
+    Console.WriteLine($"Lee el CAE y su vencimiento: {(respuesta is { Aprobado: true, Cae: "76123456789012" } && respuesta.VencimientoCae == new DateOnly(2026, 10, 28) ? "OK" : "ERROR")}");
+    Console.WriteLine($"Lee las observaciones: {(respuesta.Mensajes.Contains("10217") ? "OK" : "ERROR")}");
+
+    var rechazada = System.Xml.Linq.XElement.Parse($"""
+        <FECAESolicitarResult xmlns="{fe.NamespaceName}">
+          <FeCabResp><Resultado>R</Resultado></FeCabResp>
+          <FeDetResp><FECAEDetResponse><Resultado>R</Resultado><CAE></CAE>
+            <Observaciones><Obs><Code>10016</Code><Msg>El numero no es el proximo</Msg></Obs></Observaciones>
+          </FECAEDetResponse></FeDetResp>
+        </FECAESolicitarResult>
+        """);
+    var respuestaRechazo = ServicioArcaWs.LeerRespuestaCae(rechazada);
+    Console.WriteLine($"Lee el rechazo con su código: {(!respuestaRechazo.Aprobado && respuestaRechazo.Codigos.Contains(10016) ? "OK" : "ERROR")}");
+
+    var inexistente = System.Xml.Linq.XElement.Parse($"""
+        <FECompConsultarResult xmlns="{fe.NamespaceName}"><Errors><Err><Code>602</Code><Msg>Sin resultados</Msg></Err></Errors></FECompConsultarResult>
+        """);
+    Console.WriteLine($"Consulta de un número que no existe = null: {(ServicioArcaWs.LeerConsulta(inexistente) is null ? "OK" : "ERROR")}");
+
+    Console.WriteLine("\n=== Facturación: acceso a ARCA (WSAA) ===");
+    var tra = AutenticacionWsaa.ArmarPedido(DateTimeOffset.Now, "wsfe");
+    Console.WriteLine($"Pedido de acceso para el servicio wsfe: {(tra.Contains("<service>wsfe</service>") && tra.StartsWith("<?xml") ? "OK" : "ERROR")}");
+
+    // Certificado de prueba hecho en el momento (no sirve para ARCA, solo para probar la firma)
+    using (var rsa = System.Security.Cryptography.RSA.Create(2048))
+    {
+        var pedidoCertificado = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+            "CN=MiPOS prueba, SERIALNUMBER=CUIT 20123456786", rsa,
+            System.Security.Cryptography.HashAlgorithmName.SHA256, System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+        using var certificado = pedidoCertificado.CreateSelfSigned(DateTimeOffset.Now.AddDays(-1), DateTimeOffset.Now.AddDays(1));
+
+        var firmado = AutenticacionWsaa.Firmar(tra, certificado);
+        var cms = new System.Security.Cryptography.Pkcs.SignedCms();
+        cms.Decode(Convert.FromBase64String(firmado));
+        cms.CheckSignature(verifySignatureOnly: true);
+        Console.WriteLine($"Firma CMS válida y con el pedido adentro: {(Encoding.UTF8.GetString(cms.ContentInfo.Content) == tra ? "OK" : "ERROR")}");
+    }
+
+    var credenciales = AutenticacionWsaa.LeerRespuesta("""
+        <loginTicketResponse version="1.0"><header><expirationTime>2026-10-19T08:00:00.000-03:00</expirationTime></header>
+        <credentials><token>TOKEN123</token><sign>FIRMA456</sign></credentials></loginTicketResponse>
+        """);
+    Console.WriteLine($"Lee token, sign y vencimiento: {(credenciales is { Token: "TOKEN123", Sign: "FIRMA456" } && credenciales.Vencimiento.Hour == 8 ? "OK" : "ERROR")}");
+
+    Console.WriteLine("\n=== Facturación: código QR ===");
+    var urlQr = CodigoQrArca.ArmarUrl(new DateOnly(2026, 10, 18), 33693450239, 3, 6, 125, 2315m, 99, 0, "76123456789012");
+    var json = Encoding.UTF8.GetString(Convert.FromBase64String(urlQr[(urlQr.IndexOf("?p=") + 3)..]));
+    Console.WriteLine($"URL de ARCA con los datos en JSON: {(urlQr.StartsWith("https://www.afip.gob.ar/fe/qr/?p=") && json.Contains("\"codAut\":76123456789012") && json.Contains("\"fecha\":\"2026-10-18\"") ? "OK" : "ERROR")}");
+
+    // ----- Circuito completo en modo Simulada, contra la base -----
+    Console.WriteLine("\n=== Facturación simulada (contra la base) ===");
+    var sesion = new Sesion();
+    sesion.Iniciar(administrador);
+    var opcionesCaja = new OpcionesCaja { Numero = 99 };
+    var cajaServicio = new CajaServicio(fabrica, sesion, opcionesCaja);
+    var productoServicio = new ProductoServicio(fabrica, sesion);
+
+    // Un punto de venta al azar y una carpeta nueva: la numeración simulada empieza de cero
+    var opciones = new OpcionesFacturacion
+    {
+        Modo = ModoFacturacion.Simulada,
+        PuntoVenta = Random.Shared.Next(90000, 99998),
+        CarpetaDatos = Path.Combine(Path.GetTempPath(), "MiPOS-pruebas-facturacion", Guid.NewGuid().ToString("N"))
+    };
+    var fiscales = new DatosFiscales { CondicionIva = CondicionIva.ResponsableInscripto, IngresosBrutos = "901-123456-7", InicioActividades = "01/03/2020" };
+    var comercio = new DatosComercio { Nombre = "Almacén Don Pepe", Direccion = "Av. Siempreviva 742", Cuit = "33-69345023-9" };
+    var arca = new ServicioArcaSimulado(opciones);
+    var facturacion = new FacturacionServicio(fabrica, sesion, opciones, fiscales, comercio, arca);
+    var ventaServicio = new VentaServicio(fabrica, sesion, opcionesCaja, facturacion);
+
+    if (await cajaServicio.ObtenerTurnoAbiertoAsync() is null)
+        await cajaServicio.AbrirTurnoAsync(0);
+
+    var carrito = new Carrito();
+    carrito.Agregar((await productoServicio.BuscarPorCodigoAsync("7791234"))!); // $ 2.500 con IVA 21%
+
+    // 1. Venta normal: factura B, autorizada al momento
+    var venta1 = await ventaServicio.RegistrarAsync(carrito, 1, 2500m);
+    Console.WriteLine($"La venta guarda la factura B pendiente: {(venta1.Factura is { Estado: EstadoFactura.Pendiente, Tipo: TipoComprobante.FacturaB } ? "OK" : "ERROR")}");
+    Console.WriteLine($"Neto 2.066,12 + IVA 433,88: {(venta1.Factura is { ImporteNeto: 2066.12m, ImporteIva: 433.88m } ? "OK" : $"ERROR ({venta1.Factura?.ImporteNeto}/{venta1.Factura?.ImporteIva})")}");
+
+    var factura1 = (await facturacion.AutorizarVentaAsync(venta1.Id))!;
+    Console.WriteLine($"Autorizada con CAE y número 1: {(factura1 is { Estado: EstadoFactura.Autorizada, Numero: 1 } && factura1.Cae?.Length == 14 ? "OK" : "ERROR")}");
+
+    var ticketServicio = new TicketServicio(fabrica, comercio, sesion, cajaServicio, fiscales, facturacion);
+    var ticket1 = await ticketServicio.ArmarAsync(venta1.Id, 42, esReimpresion: false);
+    Console.WriteLine($"\n=== Ticket de factura B ===");
+    foreach (var linea in ticket1.Lineas)
+        Console.WriteLine($"|{linea.PadRight(42)}|");
+    Console.WriteLine($"[QR] {ticket1.CodigoQr}");
+    Console.WriteLine($"Ninguna línea supera el ancho: {(ticket1.Lineas.All(l => l.Length <= 42) ? "OK" : "ERROR")}");
+    Console.WriteLine($"Dice FACTURA B, CAE e IVA contenido: {(ticket1.Lineas.Any(l => l.Contains("FACTURA B")) && ticket1.Lineas.Any(l => l.StartsWith("CAE")) && ticket1.Lineas.Any(l => l.StartsWith("IVA contenido")) ? "OK" : "ERROR")}");
+    Console.WriteLine($"Marca que es simulada: {(ticket1.Lineas.Any(l => l.Contains("SIN VALIDEZ FISCAL")) ? "OK" : "ERROR")}");
+    Console.WriteLine($"Tiene código QR: {(ticket1.CodigoQr is not null ? "OK" : "ERROR")}");
+
+    // 2. Sin conexión: la venta se guarda igual y la factura queda pendiente
+    ServicioArcaSimulado.SimularSinConexion = true;
+    var venta2 = await ventaServicio.RegistrarAsync(carrito, 1, 2500m);
+    await Esperar<FacturacionException>("Sin conexión, la factura queda pendiente", () => facturacion.AutorizarVentaAsync(venta2.Id));
+    var ticket2 = await ticketServicio.ArmarAsync(venta2.Id, 42, esReimpresion: false);
+    Console.WriteLine($"El ticket dice PENDIENTE y NO VÁLIDO COMO FACTURA: {(ticket2.Lineas.Any(l => l.Contains("PENDIENTE DE AUTORIZACIÓN")) && ticket2.Lineas.Any(l => l.Contains("NO VÁLIDO COMO FACTURA")) && ticket2.CodigoQr is null ? "OK" : "ERROR")}");
+
+    // 3. Vuelve la conexión, pero se pierde la respuesta: ARCA autorizó el número 2 y no nos enteramos
+    ServicioArcaSimulado.SimularSinConexion = false;
+    ServicioArcaSimulado.SimularRespuestaPerdida = true;
+    await Esperar<FacturacionException>("Respuesta perdida (ARCA autorizó sin avisar)", () => facturacion.AutorizarVentaAsync(venta2.Id));
+    ServicioArcaSimulado.SimularRespuestaPerdida = false;
+
+    // 4. Al reintentar se consulta el número 2 en lugar de pedir otro: no hay factura duplicada
+    var resultado = await facturacion.AutorizarPendientesAsync();
+    var factura2 = (await facturacion.AutorizarVentaAsync(venta2.Id))!;
+    Console.WriteLine($"Al reintentar recupera el número 2 sin duplicar: {(resultado.Autorizadas >= 1 && factura2 is { Estado: EstadoFactura.Autorizada, Numero: 2 } ? "OK" : $"ERROR (número {factura2.Numero}, {factura2.Estado})")}");
+    Console.WriteLine($"ARCA tiene como último el 2 (no se gastó el 3): {(await arca.ObtenerUltimoNumeroAsync(33693450239, opciones.PuntoVenta, 6) == 2 ? "OK" : "ERROR")}");
+
+    // 5. Factura A a un responsable inscripto
+    var ventaA = await ventaServicio.RegistrarAsync(carrito, 2, null, DatosReceptor.Crear("20-12345678-6", "Cliente SA", CondicionIva.ResponsableInscripto));
+    var facturaA = (await facturacion.AutorizarVentaAsync(ventaA.Id))!;
+    Console.WriteLine($"Factura A autorizada con su propia numeración (1): {(facturaA is { Tipo: TipoComprobante.FacturaA, Estado: EstadoFactura.Autorizada, Numero: 1, DocTipo: 80 } ? "OK" : "ERROR")}");
+    var ticketA = await ticketServicio.ArmarAsync(ventaA.Id, 42, esReimpresion: false);
+    Console.WriteLine($"\n=== Ticket de factura A ===");
+    foreach (var linea in ticketA.Lineas)
+        Console.WriteLine($"|{linea.PadRight(42)}|");
+    Console.WriteLine($"La factura A discrimina el IVA: {(ticketA.Lineas.Any(l => l.StartsWith("Neto gravado")) && ticketA.Lineas.Any(l => l.StartsWith("IVA 21%")) ? "OK" : "ERROR")}");
+
+    // 6. Monto alto sin identificar al cliente
+    fiscales.MontoMaximoSinIdentificar = 1000m;
+    await Esperar<FacturaInvalidaException>("Venta grande sin identificar al cliente da error", () => ventaServicio.RegistrarAsync(carrito, 1, 2500m));
+    fiscales.MontoMaximoSinIdentificar = 10_000_000m;
+
+    // 7. Monotributista: factura C
+    fiscales.CondicionIva = CondicionIva.Monotributo;
+    var ventaC = await ventaServicio.RegistrarAsync(carrito, 1, 2500m);
+    var facturaC2 = (await facturacion.AutorizarVentaAsync(ventaC.Id))!;
+    Console.WriteLine($"Monotributista: factura C sin IVA, autorizada: {(facturaC2 is { Tipo: TipoComprobante.FacturaC, Estado: EstadoFactura.Autorizada, ImporteIva: 0m, ImporteNeto: 2500m } ? "OK" : "ERROR")}");
+
+    // 8. CUIT del comercio inválido: no se puede vender con la facturación activa
+    comercio.Cuit = "20-11111111-1";
+    await Esperar<FacturaInvalidaException>("CUIT del comercio inválido da error al cobrar", () => ventaServicio.RegistrarAsync(carrito, 1, 2500m));
+
+    await cajaServicio.CerrarTurnoAsync(0);
+}
+
+// Igual que Esperar, para acciones que no son asincrónicas
+static void Esperar2<TError>(string descripcion, Action accion) where TError : Exception
+{
+    try
+    {
+        accion();
+        Console.WriteLine($"{descripcion}: ERROR (no falló)");
+    }
+    catch (TError ex)
+    {
+        Console.WriteLine($"{descripcion}: OK ({ex.Message})");
+    }
+}
+
+// La facturación desactivada (como en appsettings.json del repositorio)
+static FacturacionServicio FacturacionDesactivada(PooledDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion)
+{
+    var opciones = new OpcionesFacturacion { Modo = ModoFacturacion.Desactivada };
+    return new FacturacionServicio(fabrica, sesion, opciones, new DatosFiscales(), new DatosComercio(), new ServicioArcaSimulado(opciones));
 }
 
 // Ejecuta la acción y comprueba que lance el error esperado

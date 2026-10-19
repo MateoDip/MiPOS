@@ -5,9 +5,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MiPOS.Datos;
+using MiPOS.Facturacion;
+using MiPOS.Facturacion.Arca;
 using MiPOS.Hardware.Impresion;
 using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Comprobantes;
+using MiPOS.Negocio.Facturacion;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Seguridad;
 using MiPOS.WPF.Servicios;
@@ -77,6 +80,21 @@ public partial class App : Application
                 : new ImpresoraWindows(opciones);
         });
 
+        // Factura electrónica (sección "Facturacion"): la parte técnica y los datos fiscales del comercio
+        servicios.AddTransient(_ => configuracion.GetSection("Facturacion").Get<OpcionesFacturacion>() ?? new OpcionesFacturacion());
+        servicios.AddTransient(_ => configuracion.GetSection("Facturacion").Get<DatosFiscales>() ?? new DatosFiscales());
+        servicios.AddTransient<AutenticacionWsaa>();
+
+        // Con quién se habla para facturar depende de Facturacion:Modo
+        servicios.AddTransient<IServicioArca>(proveedor =>
+        {
+            var opciones = proveedor.GetRequiredService<OpcionesFacturacion>();
+            return opciones.Modo == ModoFacturacion.Simulada
+                ? new ServicioArcaSimulado(opciones)
+                : new ServicioArcaWs(opciones, proveedor.GetRequiredService<AutenticacionWsaa>());
+        });
+
+        servicios.AddTransient<FacturacionServicio>();
         servicios.AddTransient<ProductoServicio>();
         servicios.AddTransient<VentaServicio>();
         servicios.AddTransient<UsuarioServicio>();
@@ -106,6 +124,8 @@ public partial class App : Application
         servicios.AddTransient<CompraItemViewModel>();
         servicios.AddTransient<ProveedoresViewModel>();
         servicios.AddTransient<ProveedorEdicionViewModel>();
+        servicios.AddTransient<ClienteFacturaViewModel>();
+        servicios.AddTransient<FacturasPendientesViewModel>();
 
     }
 

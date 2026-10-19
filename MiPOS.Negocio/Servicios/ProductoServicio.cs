@@ -123,7 +123,8 @@ public class ProductoServicio
             Nombre = datos.Nombre,
             CategoriaId = datos.CategoriaId,
             Precio = datos.Precio,
-            StockMinimo = datos.StockMinimo
+            StockMinimo = datos.StockMinimo,
+            AlicuotaIva = datos.AlicuotaIva
         };
 
         await using var transaccion = await contexto.Database.BeginTransactionAsync();
@@ -166,6 +167,7 @@ public class ProductoServicio
         producto.CategoriaId = datos.CategoriaId;
         producto.Precio = datos.Precio;
         producto.StockMinimo = datos.StockMinimo;
+        producto.AlicuotaIva = datos.AlicuotaIva;
 
         await GuardarAsync(contexto, datos.CodigoBarras);
     }
@@ -283,6 +285,9 @@ public class ProductoServicio
 
         if (datos.StockMinimo < 0)
             throw new ProductoInvalidoException("El stock mínimo no puede ser negativo.");
+
+        if (!Enum.IsDefined(datos.AlicuotaIva))
+            throw new ProductoInvalidoException("Elija el IVA del producto.");
     }
 
     private static async Task ValidarEnBaseAsync(MiPOSDbContext contexto, DatosProducto datos, int? idActual)

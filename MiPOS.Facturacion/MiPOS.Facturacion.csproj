@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ComunicaciÃ³n con ARCA (factura electrÃ³nica). No depende de ningÃºn otro proyecto de MiPOS:
+       recibe los datos del comprobante y devuelve el CAE. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Firma digital (CMS) del pedido de acceso a ARCA con el certificado del comercio -->
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.13" />
+  </ItemGroup>
+
+</Project>
+

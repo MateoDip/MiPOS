@@ -1,9 +1,13 @@
 ﻿using System.Globalization;
+using System.IO;
 using System.Printing;
 using System.Windows;
 using System.Windows.Documents;
+using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using QRCoder;
 
 namespace MiPOS.Hardware.Impresion;
 
@@ -18,6 +22,9 @@ public class ImpresoraWindows : IImpresoraTicket
     // Letra de ancho fijo: todas las letras ocupan lo mismo, así las columnas quedan alineadas
     private static readonly FontFamily Fuente = new("Consolas");
 
+    // Lado del código QR: ARCA pide que se pueda leer bien con un celular (entre 25 y 35 mm es lo habitual)
+    private const double LadoQrMm = 30;
+
     private readonly OpcionesImpresion _opciones;
 
     public ImpresoraWindows(OpcionesImpresion opciones)
@@ -27,7 +34,7 @@ public class ImpresoraWindows : IImpresoraTicket
 
     public int CaracteresPorLinea => _opciones.CaracteresPorLinea;
 
-    public Task ImprimirAsync(IReadOnlyList<string> lineas, string nombreTrabajo)
+    public Task ImprimirAsync(IReadOnlyList<string> lineas, string nombreTrabajo, string? codigoQr = null)
     {
         _opciones.Validar();
 
@@ -38,7 +45,7 @@ public class ImpresoraWindows : IImpresoraTicket
         {
             try
             {
-                Imprimir(lineas, nombreTrabajo);
+                Imprimir(lineas, nombreTrabajo, codigoQr);
                 resultado.SetResult();
             }
             catch (Exception ex)
@@ -58,7 +65,7 @@ public class ImpresoraWindows : IImpresoraTicket
         return resultado.Task;
     }
 
-    private void Imprimir(IReadOnlyList<string> lineas, string nombreTrabajo)
+    private void Imprimir(IReadOnlyList<string> lineas, string nombreTrabajo, string? codigoQr)
     {
         using var servidor = new LocalPrintServer();
         using var cola = BuscarImpresora(servidor);
@@ -75,13 +82,16 @@ public class ImpresoraWindows : IImpresoraTicket
         var tamanoLetra = CalcularTamanoLetra(ancho - 2 * margen);
         var altoLinea = tamanoLetra * 1.2;
 
+        // El QR no puede ser más ancho que el papel
+        var ladoQr = codigoQr is null ? 0 : Math.Min(LadoQrMm * UnidadesPorMm, ancho - 2 * margen);
+
         var ticketImpresion = (cola.UserPrintTicket ?? cola.DefaultPrintTicket).Clone();
 
         double alto;
         if (_opciones.PapelContinuo)
         {
             // Rollo: la página mide exactamente lo que ocupa el ticket
-            alto = 2 * margen + (lineas.Count + 1) * altoLinea;
+            alto = 2 * margen + (lineas.Count + 1) * altoLinea + (codigoQr is null ? 0 : ladoQr + altoLinea);
             ticketImpresion.PageMediaSize = new PageMediaSize(ancho, alto);
         }
         else
@@ -91,6 +101,8 @@ public class ImpresoraWindows : IImpresoraTicket
         }
 
         var documento = ArmarDocumento(lineas, ancho, alto, margen, tamanoLetra, altoLinea);
+        if (codigoQr is not null)
+            documento.Blocks.Add(ArmarQr(codigoQr, ladoQr, altoLinea));
 
         cola.CurrentJobSettings.Description = nombreTrabajo;
         var escritor = PrintQueue.CreateXpsDocumentWriter(cola);
@@ -129,6 +141,33 @@ public class ImpresoraWindows : IImpresoraTicket
 
         // 2% de margen de seguridad para que ninguna línea se corte en dos
         return anchoUtil / muestra.WidthIncludingTrailingWhitespace * 0.98;
+    }
+
+    // El código QR centrado, como imagen
+    private static BlockUIContainer ArmarQr(string texto, double lado, double espacioArriba)
+    {
+        using var generador = new QRCodeGenerator();
+        using var datos = generador.CreateQrCode(texto, QRCodeGenerator.ECCLevel.M);
+        var png = new PngByteQRCode(datos).GetGraphic(10);
+
+        var imagen = new BitmapImage();
+        imagen.BeginInit();
+        imagen.CacheOption = BitmapCacheOption.OnLoad;
+        imagen.StreamSource = new MemoryStream(png);
+        imagen.EndInit();
+        imagen.Freeze();
+
+        return new BlockUIContainer(new Image
+        {
+            Source = imagen,
+            Width = lado,
+            Height = lado,
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center
+        })
+        {
+            Margin = new Thickness(0, espacioArriba, 0, 0)
+        };
     }
 
     private static FlowDocument ArmarDocumento(IReadOnlyList<string> lineas, double ancho, double alto,

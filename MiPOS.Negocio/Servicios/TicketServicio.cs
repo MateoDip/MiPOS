@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using MiPOS.Datos;
 using MiPOS.Negocio.Comprobantes;
+using MiPOS.Negocio.Facturacion;
 using MiPOS.Negocio.Ventas;
 using MiPOS.Seguridad;
 
@@ -12,21 +13,26 @@ public class TicketServicio
     private readonly DatosComercio _comercio;
     private readonly Sesion _sesion;
     private readonly CajaServicio _cajaServicio;
+    private readonly DatosFiscales _datosFiscales;
+    private readonly FacturacionServicio _facturacion;
 
     public TicketServicio(IDbContextFactory<MiPOSDbContext> fabrica, DatosComercio comercio, Sesion sesion,
-                          CajaServicio cajaServicio)
+                          CajaServicio cajaServicio, DatosFiscales datosFiscales, FacturacionServicio facturacion)
     {
         _fabrica = fabrica;
         _comercio = comercio;
         _sesion = sesion;
         _cajaServicio = cajaServicio;
+        _datosFiscales = datosFiscales;
+        _facturacion = facturacion;
     }
 
     /// <summary>
-    /// Lee la venta guardada y devuelve las líneas del ticket.
-    /// Se arma siempre desde la base (no desde el carrito), así la reimpresión sale igual que el original.
+    /// Lee la venta guardada y devuelve las líneas del ticket (y el QR si es una factura autorizada).
+    /// Se arma siempre desde la base (no desde el carrito), así la reimpresión sale igual que el original
+    /// (o como factura, si el CAE llegó después).
     /// </summary>
-    public async Task<IReadOnlyList<string>> ArmarAsync(int ventaId, int caracteresPorLinea, bool esReimpresion)
+    public async Task<TicketParaImprimir> ArmarAsync(int ventaId, int caracteresPorLinea, bool esReimpresion)
     {
         _sesion.ExigirUsuario();
 
@@ -38,10 +44,14 @@ public class TicketServicio
             .Include(v => v.MedioPago)
             .Include(v => v.Usuario)
             .Include(v => v.TurnoCaja!.Caja)
+            .Include(v => v.Factura!.Alicuotas)
+            .AsSplitQuery()
             .FirstOrDefaultAsync(v => v.Id == ventaId)
             ?? throw new VentaInvalidaException($"La venta N° {ventaId} no existe.");
 
-        return TicketVenta.Armar(venta, _comercio, caracteresPorLinea, esReimpresion);
+        var lineas = TicketVenta.Armar(venta, _comercio, _datosFiscales, caracteresPorLinea, esReimpresion);
+        var qr = venta.Factura is null ? null : _facturacion.ArmarQr(venta.Factura);
+        return new TicketParaImprimir(lineas, qr);
     }
 
     // Comprobante de cierre de caja (arqueo) de un turno, armado desde la base

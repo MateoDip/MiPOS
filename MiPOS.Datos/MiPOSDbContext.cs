@@ -21,6 +21,8 @@ public class MiPOSDbContext : DbContext
     public DbSet<Proveedor> Proveedores => Set<Proveedor>();
     public DbSet<Compra> Compras => Set<Compra>();
     public DbSet<DetalleCompra> DetallesCompra => Set<DetalleCompra>();
+    public DbSet<Factura> Facturas => Set<Factura>();
+    public DbSet<FacturaIva> FacturasIva => Set<FacturaIva>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

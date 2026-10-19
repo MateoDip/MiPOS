@@ -30,6 +30,7 @@
         <!-- Ya no quedan teclas F libres: la administración usa Ctrl + letra -->
         <KeyBinding Key="P" Modifiers="Control" Command="{Binding GestionarProductosCommand}"/>
         <KeyBinding Key="M" Modifiers="Control" Command="{Binding GestionarComprasCommand}"/>
+        <KeyBinding Key="F" Modifiers="Control" Command="{Binding VerFacturasPendientesCommand}"/>
     </Window.InputBindings>
 
     <Window.Resources>
@@ -58,6 +59,8 @@
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="MiPOS" FontSize="26" FontWeight="Bold"/>
                 <TextBlock Text="{Binding AvisoStock}" Foreground="DarkOrange" FontWeight="SemiBold"
+                           VerticalAlignment="Center" Margin="24,0,0,0"/>
+                <TextBlock Text="{Binding AvisoFacturas}" Foreground="Firebrick" FontWeight="SemiBold"
                            VerticalAlignment="Center" Margin="24,0,0,0"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">

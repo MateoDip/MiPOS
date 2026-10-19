@@ -29,6 +29,9 @@ public class ProductoConfiguracion : IEntityTypeConfiguration<Producto>
         // 18 dígitos en total, 2 decimales (centavos)
         builder.Property(p => p.Precio).HasPrecision(18, 2);
 
+        // Código de ARCA de la alícuota (5 = 21%)
+        builder.Property(p => p.AlicuotaIva).HasConversion<int>();
+
         // Un producto pertenece a una categoría.
         // Restrict: no se puede borrar una categoría que tenga productos.
         builder.HasOne(p => p.Categoria)

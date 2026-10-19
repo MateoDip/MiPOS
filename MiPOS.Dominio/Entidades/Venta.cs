@@ -40,4 +40,7 @@ public class Venta
     public decimal? Vuelto { get; set; }
 
     public List<DetalleVenta> Detalles { get; set; } = new();
+
+    // Factura electrónica (null si la facturación estaba desactivada al vender)
+    public Factura? Factura { get; set; }
 }
