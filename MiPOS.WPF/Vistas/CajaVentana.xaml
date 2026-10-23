@@ -64,6 +64,9 @@
                            VerticalAlignment="Center" Margin="24,0,0,0"/>
                 <TextBlock Text="{Binding AvisoFacturas}" Foreground="Firebrick" FontWeight="SemiBold"
                            VerticalAlignment="Center" Margin="24,0,0,0"/>
+                <TextBlock Text="{Binding AvisoConexion}" Foreground="White" Background="Firebrick" FontWeight="Bold"
+                           Padding="8,2" VerticalAlignment="Center" Margin="24,0,0,0"
+                           Visibility="{Binding HayAvisoConexion, Converter={StaticResource VisibleSiEsTrue}}"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                 <TextBlock Text="{Binding CajaTexto}"/>

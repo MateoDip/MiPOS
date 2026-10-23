@@ -34,7 +34,11 @@ public static class TicketVenta
         if (factura is not null)
             DatosFactura(lineas, factura, ancho, separador);
 
-        DosColumnas(lineas, $"Venta N° {venta.Id}", venta.Fecha.ToString("dd/MM/yyyy HH:mm", Argentina), ancho);
+        // Sin conexión, el número es el de la base local de la caja (la venta recibe su número real al subirse)
+        var numero = venta.RegistradaSinConexion ? $"Venta S/C N° {venta.Id}" : $"Venta N° {venta.Id}";
+        DosColumnas(lineas, numero, venta.Fecha.ToString("dd/MM/yyyy HH:mm", Argentina), ancho);
+        if (venta.RegistradaSinConexion)
+            AjustarTexto(lineas, "Registrada sin conexión", ancho);
         if (venta.TurnoCaja?.Caja is { } caja)
             AjustarTexto(lineas, caja.Nombre, ancho);
         AjustarTexto(lineas, $"Cajero: {venta.Usuario?.NombreCompleto}", ancho);

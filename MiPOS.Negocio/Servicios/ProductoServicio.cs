@@ -2,6 +2,7 @@
 using MiPOS.Datos;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Negocio.Productos;
+using MiPOS.Negocio.SinConexion;
 using MiPOS.Seguridad;
 
 namespace MiPOS.Negocio.Servicios;
@@ -17,11 +18,14 @@ public class ProductoServicio
 
     private readonly IDbContextFactory<MiPOSDbContext> _fabrica;
     private readonly Sesion _sesion;
+    private readonly BaseLocal? _baseLocal;
 
-    public ProductoServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion)
+    // baseLocal es opcional: sin ella (por ejemplo, en las pruebas) se trabaja solo con la base central
+    public ProductoServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion, BaseLocal? baseLocal = null)
     {
         _fabrica = fabrica;
         _sesion = sesion;
+        _baseLocal = baseLocal;
     }
 
     // ----- Búsquedas de la caja (solo productos activos) -----
@@ -33,13 +37,30 @@ public class ProductoServicio
 
         codigo = codigo.Trim();
 
-        // Se abre una conexión solo para esta búsqueda y se cierra al terminar
-        await using var contexto = await _fabrica.CreateDbContextAsync();
+        // Sin conexión con la base central se busca en la copia de esta caja
+        if (_baseLocal?.UsarLocal == true)
+            return await BuscarPorCodigoLocalAsync(codigo);
 
-        return await contexto.Productos
-            .AsNoTracking()
-            .Include(p => p.Categoria)
-            .FirstOrDefaultAsync(p => p.CodigoBarras == codigo && p.Activo);
+        try
+        {
+            // Se abre una conexión solo para esta búsqueda y se cierra al terminar
+            await using var contexto = await _fabrica.CreateDbContextAsync();
+
+            return await contexto.Productos
+                .AsNoTracking()
+                .Include(p => p.Categoria)
+                .FirstOrDefaultAsync(p => p.CodigoBarras == codigo && p.Activo);
+        }
+        catch (Exception ex) when (_baseLocal?.EsCorte(ex) == true)
+        {
+            return await BuscarPorCodigoLocalAsync(codigo);
+        }
+    }
+
+    private async Task<Producto?> BuscarPorCodigoLocalAsync(string codigo)
+    {
+        await using var local = await _baseLocal!.CrearContextoAsync();
+        return await local.Productos.AsNoTracking().FirstOrDefaultAsync(p => p.CodigoBarras == codigo && p.Activo);
     }
 
     public async Task<List<Producto>> BuscarPorNombreAsync(string texto, int maximo = 20)
@@ -49,11 +70,33 @@ public class ProductoServicio
 
         texto = texto.Trim();
 
-        await using var contexto = await _fabrica.CreateDbContextAsync();
+        if (_baseLocal?.UsarLocal == true)
+            return await BuscarPorNombreLocalAsync(texto, maximo);
 
-        return await contexto.Productos
+        try
+        {
+            await using var contexto = await _fabrica.CreateDbContextAsync();
+
+            return await contexto.Productos
+                .AsNoTracking()
+                .Where(p => p.Activo && p.Nombre.Contains(texto))
+                .OrderBy(p => p.Nombre)
+                .Take(maximo)
+                .ToListAsync();
+        }
+        catch (Exception ex) when (_baseLocal?.EsCorte(ex) == true)
+        {
+            return await BuscarPorNombreLocalAsync(texto, maximo);
+        }
+    }
+
+    // En SQLite, LIKE no distingue mayúsculas de minúsculas (Contains sí las distinguiría)
+    private async Task<List<Producto>> BuscarPorNombreLocalAsync(string texto, int maximo)
+    {
+        await using var local = await _baseLocal!.CrearContextoAsync();
+        return await local.Productos
             .AsNoTracking()
-            .Where(p => p.Activo && p.Nombre.Contains(texto))
+            .Where(p => p.Activo && EF.Functions.Like(p.Nombre, $"%{texto}%"))
             .OrderBy(p => p.Nombre)
             .Take(maximo)
             .ToListAsync();

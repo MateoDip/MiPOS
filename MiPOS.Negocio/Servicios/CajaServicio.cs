@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using MiPOS.Datos;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Negocio.Cajas;
+using MiPOS.Negocio.SinConexion;
 using MiPOS.Seguridad;
 
 namespace MiPOS.Negocio.Servicios;
@@ -17,31 +18,70 @@ public class CajaServicio
     private readonly IDbContextFactory<MiPOSDbContext> _fabrica;
     private readonly Sesion _sesion;
     private readonly OpcionesCaja _opciones;
+    private readonly BaseLocal? _baseLocal;
 
-    public CajaServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion, OpcionesCaja opciones)
+    public CajaServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion, OpcionesCaja opciones,
+                        BaseLocal? baseLocal = null)
     {
         _fabrica = fabrica;
         _sesion = sesion;
         _opciones = opciones;
+        _baseLocal = baseLocal;
     }
 
     // La caja de esta PC. Lanza CajaInvalidaException si no existe o está desactivada.
+    // Sin conexión, la que quedó guardada en la base local.
     public async Task<Caja> ObtenerCajaAsync()
     {
-        await using var contexto = await _fabrica.CreateDbContextAsync();
-        return await BuscarCajaAsync(contexto);
+        if (_baseLocal?.UsarLocal == true && await _baseLocal.LeerCajaAsync() is { } guardada)
+            return guardada;
+
+        try
+        {
+            await using var contexto = await _fabrica.CreateDbContextAsync();
+            return await BuscarCajaAsync(contexto);
+        }
+        catch (Exception ex) when (_baseLocal?.EsCorte(ex) == true)
+        {
+            return await _baseLocal.LeerCajaAsync()
+                   ?? throw new CajaInvalidaException("No hay conexión con la base central y esta caja todavía no tiene sus datos guardados.");
+        }
     }
 
-    // El turno abierto de la caja de esta PC, o null si la caja está cerrada
+    // El turno abierto de la caja de esta PC, o null si la caja está cerrada.
+    // Sin conexión, el que estaba abierto la última vez que hubo conexión.
     public async Task<TurnoCaja?> ObtenerTurnoAbiertoAsync()
     {
-        await using var contexto = await _fabrica.CreateDbContextAsync();
+        if (_baseLocal?.UsarLocal == true)
+            return await LeerTurnoLocalAsync();
 
-        return await contexto.TurnosCaja
-            .AsNoTracking()
-            .Include(t => t.Caja)
-            .Include(t => t.UsuarioApertura)
-            .FirstOrDefaultAsync(t => t.Caja!.Numero == _opciones.Numero && t.FechaCierre == null);
+        try
+        {
+            await using var contexto = await _fabrica.CreateDbContextAsync();
+
+            var turno = await contexto.TurnosCaja
+                .AsNoTracking()
+                .Include(t => t.Caja)
+                .Include(t => t.UsuarioApertura)
+                .FirstOrDefaultAsync(t => t.Caja!.Numero == _opciones.Numero && t.FechaCierre == null);
+
+            if (turno?.Caja is { } caja)
+                await (_baseLocal?.GuardarCajaYTurnoAsync(caja, turno) ?? Task.CompletedTask);
+
+            return turno;
+        }
+        catch (Exception ex) when (_baseLocal?.EsCorte(ex) == true)
+        {
+            return await LeerTurnoLocalAsync();
+        }
+    }
+
+    private async Task<TurnoCaja?> LeerTurnoLocalAsync()
+    {
+        var turno = await _baseLocal!.LeerTurnoAsync();
+        if (turno is not null)
+            turno.Caja = await _baseLocal.LeerCajaAsync();
+        return turno;
     }
 
     public async Task<TurnoCaja> AbrirTurnoAsync(decimal montoInicial)
@@ -77,6 +117,9 @@ public class CajaServicio
 
         turno.Caja = caja;
         turno.UsuarioApertura = usuario;
+
+        // Si después se corta la conexión, se sigue vendiendo en este turno
+        await (_baseLocal?.GuardarCajaYTurnoAsync(caja, turno) ?? Task.CompletedTask);
         return turno;
     }
 
@@ -149,6 +192,13 @@ public class CajaServicio
         var usuario = _sesion.ExigirUsuario();
         ValidarMonto(efectivoContado, permitirCero: true);
 
+        // Las ventas hechas sin conexión son parte del turno: sin ellas el arqueo daría mal
+        var pendientes = await (_baseLocal?.ContarVentasPendientesAsync() ?? Task.FromResult(0));
+        if (pendientes > 0)
+            throw new CajaInvalidaException(
+                $"Hay {pendientes} venta(s) hechas sin conexión que todavía no se subieron a la base central. " +
+                "Se suben solas cuando vuelve la conexión; espere unos segundos y vuelva a intentar.");
+
         await using var contexto = await _fabrica.CreateDbContextAsync();
         var turno = await BuscarTurnoAbiertoAsync(contexto);
 
@@ -167,6 +217,9 @@ public class CajaServicio
 
         if (filas == 0)
             throw new CajaInvalidaException("La caja acaba de ser cerrada desde otra PC.");
+
+        // Sin turno abierto, sin conexión no se puede vender
+        await (_baseLocal?.GuardarCajaYTurnoAsync(await BuscarCajaAsync(contexto), null) ?? Task.CompletedTask);
 
         return await CalcularResumenAsync(contexto, turno.Id);
     }

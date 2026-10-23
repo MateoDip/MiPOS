@@ -30,6 +30,14 @@ public class VentaConfiguracion : IEntityTypeConfiguration<Venta>
         builder.Property(v => v.Vuelto).HasPrecision(18, 2);
         builder.Property(v => v.ReferenciaPago).HasMaxLength(100);
 
+        // Una venta hecha sin conexión no se puede subir dos veces
+        builder.HasIndex(v => v.IdentificadorUnico)
+               .IsUnique()
+               .HasFilter("[IdentificadorUnico] IS NOT NULL");
+
+        // Solo para la pantalla: no es una columna
+        builder.Ignore(v => v.RegistradaSinConexion);
+
         // Restrict: no se puede borrar un usuario que tenga ventas (igual se desactivan, no se borran)
         builder.HasOne(v => v.Usuario)
                .WithMany()

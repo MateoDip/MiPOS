@@ -47,4 +47,12 @@ public class Venta
 
     // Factura electrónica (null si la facturación estaba desactivada al vender)
     public Factura? Factura { get; set; }
+
+    // Identificador que se genera al cobrar. Una venta hecha sin conexión lo conserva al subirse
+    // a la base central: así nunca se sube dos veces. null en las ventas anteriores a la Fase 8.
+    public Guid? IdentificadorUnico { get; set; }
+
+    // true si se guardó en la base local de la caja porque no había conexión con la base central.
+    // No se guarda en ninguna tabla: solo avisa a la pantalla qué ticket imprimir.
+    public bool RegistradaSinConexion { get; set; }
 }

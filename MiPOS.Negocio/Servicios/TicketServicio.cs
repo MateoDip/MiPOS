@@ -2,6 +2,7 @@
 using MiPOS.Datos;
 using MiPOS.Negocio.Comprobantes;
 using MiPOS.Negocio.Facturacion;
+using MiPOS.Negocio.SinConexion;
 using MiPOS.Negocio.Ventas;
 using MiPOS.Seguridad;
 
@@ -15,9 +16,11 @@ public class TicketServicio
     private readonly CajaServicio _cajaServicio;
     private readonly DatosFiscales _datosFiscales;
     private readonly FacturacionServicio _facturacion;
+    private readonly BaseLocal? _baseLocal;
 
     public TicketServicio(IDbContextFactory<MiPOSDbContext> fabrica, DatosComercio comercio, Sesion sesion,
-                          CajaServicio cajaServicio, DatosFiscales datosFiscales, FacturacionServicio facturacion)
+                          CajaServicio cajaServicio, DatosFiscales datosFiscales, FacturacionServicio facturacion,
+                          BaseLocal? baseLocal = null)
     {
         _fabrica = fabrica;
         _comercio = comercio;
@@ -25,6 +28,31 @@ public class TicketServicio
         _cajaServicio = cajaServicio;
         _datosFiscales = datosFiscales;
         _facturacion = facturacion;
+        _baseLocal = baseLocal;
+    }
+
+    /// <summary>
+    /// Ticket de una venta buscada por su IdentificadorUnico: si todavía está en la base local
+    /// (hecha sin conexión y sin subir) sale como "venta sin conexión"; si ya se subió, sale con su número real.
+    /// </summary>
+    public async Task<TicketParaImprimir> ArmarPorIdentificadorAsync(Guid identificador, int caracteresPorLinea, bool esReimpresion)
+    {
+        _sesion.ExigirUsuario();
+
+        if (_baseLocal is not null && await _baseLocal.LeerVentaPendienteAsync(identificador) is { } pendiente)
+        {
+            var lineas = TicketVenta.Armar(pendiente, _comercio, _datosFiscales, caracteresPorLinea, esReimpresion);
+            return new TicketParaImprimir(lineas, null);
+        }
+
+        await using var contexto = await _fabrica.CreateDbContextAsync();
+        var ventaId = await contexto.Ventas
+            .Where(v => v.IdentificadorUnico == identificador)
+            .Select(v => (int?)v.Id)
+            .FirstOrDefaultAsync()
+            ?? throw new VentaInvalidaException("La venta no existe.");
+
+        return await ArmarAsync(ventaId, caracteresPorLinea, esReimpresion);
     }
 
     /// <summary>

@@ -37,14 +37,22 @@ public partial class CajaViewModel : ObservableObject
     private readonly LectorCodigos _lector;
     private readonly DialogoServicio _dialogos;
     private readonly Sesion _sesion;
+    private readonly SincronizacionServicio _sincronizacion;
     private readonly Carrito _carrito = new();
+
+    // La sincronización periódica con la base central (se detiene al cerrar la ventana)
+    private CancellationTokenSource? _cancelacionSincronizacion;
+
+    // Última venta de esta sesión hecha sin conexión: F8 la reimprime (todavía no tiene número real)
+    private Guid? _ultimaVentaSinConexion;
 
     public CajaViewModel(ProductoServicio productoServicio, UsuarioServicio usuarioServicio,
                          VentaServicio ventaServicio, TicketServicio ticketServicio, CajaServicio cajaServicio,
                          StockServicio stockServicio, FacturacionServicio facturacionServicio,
                          IImpresoraTicket impresora, CajonDinero cajon, LectorCodigos lector,
-                         DialogoServicio dialogos, Sesion sesion)
+                         DialogoServicio dialogos, Sesion sesion, SincronizacionServicio sincronizacion)
     {
+        _sincronizacion = sincronizacion;
         _productoServicio = productoServicio;
         _usuarioServicio = usuarioServicio;
         _ventaServicio = ventaServicio;
@@ -119,6 +127,13 @@ public partial class CajaViewModel : ObservableObject
     // "2 facturas sin autorizar · Ctrl+F" (vacío si no hay o si la facturación está desactivada)
     [ObservableProperty]
     private string avisoFacturas = string.Empty;
+
+    // "SIN CONEXIÓN desde 10:42 · 3 ventas sin subir" (vacío si hay conexión y no queda nada por subir)
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HayAvisoConexion))]
+    private string avisoConexion = string.Empty;
+
+    public bool HayAvisoConexion => AvisoConexion.Length > 0;
 
     // Cuando cambia el producto seleccionado, se re-evalúa si se puede eliminar o cambiar cantidad
     [ObservableProperty]
@@ -218,19 +233,32 @@ public partial class CajaViewModel : ObservableObject
             ItemSeleccionado = null;
             CodigoIngresado = string.Empty;
             Mensaje = string.Empty;
+            var numero = venta.RegistradaSinConexion ? $"Venta S/C N° {venta.Id}" : $"Venta N° {venta.Id}";
             MensajeExito = venta.Vuelto is decimal vuelto
-                ? $"Venta N° {venta.Id} registrada. Vuelto: $ {vuelto:N2}"
-                : $"Venta N° {venta.Id} registrada.";
+                ? $"{numero} registrada. Vuelto: $ {vuelto:N2}"
+                : $"{numero} registrada.";
             ActualizarTotales();
 
             // En efectivo se abre el cajón para guardar la plata y dar el vuelto
             if (venta.MontoRecibido is not null)
                 _ = AbrirCajonAsync();
 
-            // Se factura e imprime sin esperar: el cajero puede empezar la próxima venta mientras sale el ticket.
-            // Si falla, la venta ya está registrada igual y se avisa (factura pendiente, o reimprimir con F8).
-            _ = FacturarEImprimirAsync(venta.Id);
-            _ = ActualizarAvisoStockAsync();
+            if (venta.RegistradaSinConexion)
+            {
+                // Quedó en la base local: la factura (si corresponde) se pide cuando la venta se suba
+                _ultimaVentaSinConexion = venta.IdentificadorUnico;
+                _ = ImprimirTicketSinConexionAsync(venta.IdentificadorUnico!.Value, esReimpresion: false);
+                _ = ActualizarAvisoConexionAsync();
+            }
+            else
+            {
+                _ultimaVentaSinConexion = null;
+
+                // Se factura e imprime sin esperar: el cajero puede empezar la próxima venta mientras sale el ticket.
+                // Si falla, la venta ya está registrada igual y se avisa (factura pendiente, o reimprimir con F8).
+                _ = FacturarEImprimirAsync(venta.Id);
+                _ = ActualizarAvisoStockAsync();
+            }
         }
 
         AccionTerminada?.Invoke();
@@ -241,6 +269,16 @@ public partial class CajaViewModel : ObservableObject
     private async Task ReimprimirUltimoTicketAsync()
     {
         MensajeExito = string.Empty;
+
+        // La última venta se hizo sin conexión: se busca primero en la base local
+        if (_ultimaVentaSinConexion is Guid identificador)
+        {
+            Mensaje = string.Empty;
+            await ImprimirTicketSinConexionAsync(identificador, esReimpresion: true);
+            AccionTerminada?.Invoke();
+            return;
+        }
+
         try
         {
             var ventaId = await _ventaServicio.ObtenerUltimaVentaIdAsync();
@@ -328,10 +366,105 @@ public partial class CajaViewModel : ObservableObject
         }
     }
 
+    // Ticket de una venta hecha sin conexión (si ya se subió, sale con su número real)
+    private async Task ImprimirTicketSinConexionAsync(Guid identificador, bool esReimpresion)
+    {
+        try
+        {
+            var ticket = await _ticketServicio.ArmarPorIdentificadorAsync(identificador, _impresora.CaracteresPorLinea, esReimpresion);
+            await _impresora.ImprimirAsync(ticket.Lineas, "Venta sin conexión", ticket.CodigoQr);
+
+            if (esReimpresion)
+                MensajeExito = "Ticket de la última venta reimpreso.";
+        }
+        catch (ImpresionException ex)
+        {
+            Mensaje = $"No se pudo imprimir el ticket. {ex.Message} Use F8 para reimprimir.";
+        }
+        catch (Exception)
+        {
+            Mensaje = "No se pudo imprimir el ticket. Use F8 para reimprimir.";
+        }
+    }
+
+    // ----- Sin conexión con la base central -----
+
+    // Cada SinConexion:SegundosEntreIntentos: probar la conexión, subir las ventas pendientes y actualizar la copia local
+    private async Task SincronizarPeriodicamenteAsync(CancellationToken cancelacion)
+    {
+        using var temporizador = new PeriodicTimer(_sincronizacion.Intervalo);
+        var forzarDescarga = true; // al entrar a la caja se trae todo actualizado
+
+        try
+        {
+            do
+            {
+                // En otro hilo: la base local (SQLite) trabaja en forma sincrónica y no tiene que trabar la pantalla
+                var forzar = forzarDescarga;
+                var resultado = await Task.Run(() => _sincronizacion.SincronizarAsync(forzar, cancelacion), cancelacion);
+                forzarDescarga = false;
+                MostrarEstadoConexion(resultado);
+
+                if (resultado.VentasSubidas > 0)
+                {
+                    MensajeExito = resultado.VentasSubidas == 1
+                        ? "Volvió la conexión: se subió 1 venta hecha sin conexión."
+                        : $"Volvió la conexión: se subieron {resultado.VentasSubidas} ventas hechas sin conexión.";
+                    await ActualizarAvisoStockAsync();
+                    await ActualizarAvisoFacturasAsync();
+                }
+
+                if (resultado.UltimoError is not null)
+                    Mensaje = resultado.UltimoError;
+            }
+            while (await temporizador.WaitForNextTickAsync(cancelacion));
+        }
+        catch (OperationCanceledException)
+        {
+            // Se cerró la ventana de la caja
+        }
+    }
+
+    private void MostrarEstadoConexion(ResultadoSincronizacion resultado)
+    {
+        var pendientes = resultado.VentasPendientes switch
+        {
+            0 => string.Empty,
+            1 => "1 venta sin subir",
+            _ => $"{resultado.VentasPendientes} ventas sin subir"
+        };
+
+        if (!resultado.HayConexion)
+        {
+            var desde = _sincronizacion.SinConexionDesde is DateTime fecha ? $" desde {fecha:HH:mm}" : string.Empty;
+            AvisoConexion = pendientes.Length == 0 ? $"SIN CONEXIÓN{desde}" : $"SIN CONEXIÓN{desde} · {pendientes}";
+        }
+        else
+        {
+            AvisoConexion = pendientes;
+        }
+    }
+
+    // Después de una venta sin conexión, se actualiza el contador sin esperar a la próxima sincronización
+    private async Task ActualizarAvisoConexionAsync()
+    {
+        try
+        {
+            var pendientes = await _sincronizacion.ContarVentasPendientesAsync();
+            MostrarEstadoConexion(new ResultadoSincronizacion(!_sincronizacion.SinConexion, 0, pendientes, null));
+        }
+        catch (Exception)
+        {
+        }
+    }
+
     // Al abrir la pantalla: se averigua si la caja está abierta. Si está cerrada, se ofrece abrirla.
     [RelayCommand]
     private async Task CargarCajaAsync()
     {
+        // Primero, para que también se recupere sola si al entrar no había conexión
+        IniciarSincronizacion();
+
         try
         {
             NombreCaja = (await _cajaServicio.ObtenerCajaAsync()).Nombre;
@@ -341,8 +474,11 @@ public partial class CajaViewModel : ObservableObject
             await ActualizarAvisoFacturasAsync();
             IniciarLector();
 
-            if (!CajaAbierta)
+            // Sin conexión no se puede abrir la caja (el turno se crea en la base central)
+            if (!CajaAbierta && !_sincronizacion.SinConexion)
                 await AbrirCajaAsync();
+            else if (!CajaAbierta)
+                Mensaje = "No hay conexión con la base central y la caja estaba cerrada: no se puede vender hasta que vuelva la conexión.";
         }
         catch (CajaInvalidaException ex)
         {
@@ -361,7 +497,7 @@ public partial class CajaViewModel : ObservableObject
     private async Task AbrirOCerrarCajaAsync()
     {
         if (CajaAbierta)
-            CerrarCaja();
+            await CerrarCajaAsync();
         else
             await AbrirCajaAsync();
 
@@ -407,12 +543,36 @@ public partial class CajaViewModel : ObservableObject
         }
     }
 
-    private void CerrarCaja()
+    private async Task CerrarCajaAsync()
     {
         if (!_carrito.EstaVacio)
         {
             Mensaje = "Termine o cancele la venta antes de cerrar la caja.";
             return;
+        }
+
+        // Las ventas hechas sin conexión tienen que estar subidas antes del arqueo (si no, daría mal)
+        try
+        {
+            if (await _sincronizacion.ContarVentasPendientesAsync() > 0)
+            {
+                Mensaje = "Subiendo las ventas hechas sin conexión...";
+                var resultado = await Task.Run(() => _sincronizacion.SincronizarAsync());
+                MostrarEstadoConexion(resultado);
+                Mensaje = string.Empty;
+
+                if (resultado.VentasPendientes > 0)
+                {
+                    Mensaje = resultado.HayConexion
+                        ? $"No se pudieron subir {resultado.VentasPendientes} venta(s) hechas sin conexión: {resultado.UltimoError} No se puede cerrar la caja todavía."
+                        : "No hay conexión con la base central: la caja se puede cerrar cuando vuelva la conexión y se suban las ventas.";
+                    return;
+                }
+            }
+        }
+        catch (Exception)
+        {
+            // Si no se puede leer la base local, el cierre lo vuelve a controlar CajaServicio
         }
 
         // Se abre el cajón para contar el efectivo
@@ -702,8 +862,21 @@ public partial class CajaViewModel : ObservableObject
         AgregarPorCodigoCommand.Execute(null);
     }
 
-    // Lo llama la ventana al cerrarse, para liberar el puerto del lector
-    public void LiberarDispositivos() => _lector.Detener();
+    private void IniciarSincronizacion()
+    {
+        if (!_sincronizacion.Habilitada || _cancelacionSincronizacion is not null)
+            return;
+
+        _cancelacionSincronizacion = new CancellationTokenSource();
+        _ = SincronizarPeriodicamenteAsync(_cancelacionSincronizacion.Token);
+    }
+
+    // Lo llama la ventana al cerrarse, para liberar el puerto del lector y detener la sincronización
+    public void LiberarDispositivos()
+    {
+        _lector.Detener();
+        _cancelacionSincronizacion?.Cancel();
+    }
 
     // El aviso de stock bajo solo lo ve quien puede corregirlo
     private async Task ActualizarAvisoStockAsync()

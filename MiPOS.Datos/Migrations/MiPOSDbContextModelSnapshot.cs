@@ -749,6 +749,9 @@ namespace MiPOS.Datos.Migrations
                     b.Property<DateTime>("Fecha")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("IdentificadorUnico")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<int>("MedioPagoId")
                         .HasColumnType("int");
 
@@ -783,6 +786,10 @@ namespace MiPOS.Datos.Migrations
                     b.HasIndex("DescuentoAutorizadoPorId");
 
                     b.HasIndex("Fecha");
+
+                    b.HasIndex("IdentificadorUnico")
+                        .IsUnique()
+                        .HasFilter("[IdentificadorUnico] IS NOT NULL");
 
                     b.HasIndex("MedioPagoId");
 

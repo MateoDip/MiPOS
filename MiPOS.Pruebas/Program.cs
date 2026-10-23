@@ -2,6 +2,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using MiPOS.Datos;
+using MiPOS.DatosLocal;
+using MiPOS.Negocio.SinConexion;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Dominio.Entidades;
 using MiPOS.Seguridad;
@@ -215,10 +217,96 @@ await using (var contexto = await fabrica.CreateDbContextAsync())
         await ProbarCajaAsync(fabrica, administrador);
         await ProbarProductosYStockAsync(fabrica, administrador);
         await ProbarFacturacionAsync(fabrica, administrador);
+        await ProbarSinConexionAsync(fabrica, administrador);
     }
 
     // La caja de pruebas queda desactivada para que no aparezca en el sistema
     await contexto.Cajas.Where(c => c.Numero == 99).ExecuteUpdateAsync(s => s.SetProperty(c => c.Activa, false));
+}
+
+// --- Prueba 14: venta sin conexión (Fase 8) ---
+// La "base central caída" es un servidor que no existe; la base local es un archivo temporal.
+static async Task ProbarSinConexionAsync(PooledDbContextFactory<MiPOSDbContext> fabrica, Usuario administrador)
+{
+    Console.WriteLine("\n=== Sin conexión ===");
+    var sesion = new Sesion();
+    sesion.Iniciar(administrador);
+    var opcionesCaja = new OpcionesCaja { Numero = 99 };
+
+    var caida = new PooledDbContextFactory<MiPOSDbContext>(new DbContextOptionsBuilder<MiPOSDbContext>()
+        .UseSqlServer("Server=tcp:127.0.0.1,1;Database=MiPOS;Connect Timeout=2;TrustServerCertificate=True").Options);
+
+    var archivo = Path.Combine(Path.GetTempPath(), $"mipos-prueba-{Guid.NewGuid():N}.db");
+    var opcionesLocal = new OpcionesSinConexion { ArchivoBase = archivo };
+    var fabricaLocal = new PooledDbContextFactory<LocalDbContext>(new DbContextOptionsBuilder<LocalDbContext>()
+        .UseSqlite($"Data Source={archivo};Pooling=False").Options);
+    var baseLocal = new BaseLocal(fabricaLocal, opcionesLocal);
+    baseLocal.Preparar();
+    Console.WriteLine($"Base local creada: {(baseLocal.Habilitada && File.Exists(archivo) ? "OK" : "ERROR " + baseLocal.ErrorPreparacion)}");
+
+    var facturacion = FacturacionDesactivada(fabrica, sesion);
+    var cajaServicio = new CajaServicio(fabrica, sesion, opcionesCaja, baseLocal);
+    var sincronizacion = new SincronizacionServicio(fabrica, baseLocal, opcionesCaja, facturacion);
+
+    if (await cajaServicio.ObtenerTurnoAbiertoAsync() is not null)
+        await cajaServicio.CerrarTurnoAsync(0);
+    var turno = await cajaServicio.AbrirTurnoAsync(0);
+
+    // 1. Con conexión: se descarga la copia
+    var primera = await sincronizacion.SincronizarAsync(forzarDescarga: true);
+    await using (var local = await fabricaLocal.CreateDbContextAsync())
+        Console.WriteLine($"Descarga del catálogo, medios de pago y usuarios: {(primera.HayConexion && await local.Productos.AnyAsync() && await local.MediosPago.AnyAsync() && await local.Usuarios.AnyAsync() ? "OK" : "ERROR")}");
+
+    // 2. Se cae la base central: la búsqueda y la venta siguen con la base local
+    var productoCaido = new ProductoServicio(caida, sesion, baseLocal);
+    var producto = await productoCaido.BuscarPorCodigoAsync("7791234");
+    Console.WriteLine($"Buscar por código sin conexión: {(producto is not null && baseLocal.SinConexion ? "OK" : "ERROR")}");
+    var porNombre = await productoCaido.BuscarPorNombreAsync("coca");
+    Console.WriteLine($"Buscar por nombre sin conexión (sin distinguir mayúsculas): {(porNombre.Any(p => p.Id == producto!.Id) ? "OK" : "ERROR")}");
+
+    var cajaCaida = new CajaServicio(caida, sesion, opcionesCaja, baseLocal);
+    Console.WriteLine($"Turno abierto sin conexión: {((await cajaCaida.ObtenerTurnoAbiertoAsync())?.Id == turno.Id ? "OK" : "ERROR")}");
+
+    var stockAntes = await LeerStockAsync(fabrica, producto!.Id);
+    var carrito = new Carrito();
+    carrito.Agregar(producto);
+    carrito.Agregar(producto);
+    var ventaCaida = new VentaServicio(caida, sesion, opcionesCaja, facturacion, baseLocal);
+    var venta = await ventaCaida.RegistrarAsync(carrito, 1, 10000m);
+    Console.WriteLine($"Venta sin conexión guardada en la base local: {(venta is { RegistradaSinConexion: true, IdentificadorUnico: not null } ? "OK" : "ERROR")} (S/C N° {venta.Id}, vuelto {venta.Vuelto:N2})");
+
+    var ticket = await new TicketServicio(caida, new DatosComercio(), sesion, cajaCaida, new DatosFiscales(), facturacion, baseLocal)
+        .ArmarPorIdentificadorAsync(venta.IdentificadorUnico!.Value, 42, false);
+    Console.WriteLine($"Ticket sin conexión (\"Venta S/C\"): {(ticket.Lineas.Any(l => l.Contains("Venta S/C N°")) ? "OK" : "ERROR")}");
+
+    await Esperar<CajaInvalidaException>("Cerrar la caja con ventas sin subir da error", () => cajaServicio.CerrarTurnoAsync(0));
+
+    // 3. Vuelve la conexión: se sube la venta y se descuenta el stock
+    var segunda = await sincronizacion.SincronizarAsync();
+    var stockDespues = await LeerStockAsync(fabrica, producto.Id);
+    Console.WriteLine($"Al volver la conexión se sube la venta: {(segunda is { HayConexion: true, VentasSubidas: 1, VentasPendientes: 0 } && !baseLocal.SinConexion ? "OK" : "ERROR")}");
+    Console.WriteLine($"Se descuenta el stock al subirla: {(stockDespues == stockAntes - 2 ? "OK" : $"ERROR ({stockAntes} -> {stockDespues})")}");
+
+    // 4. Si la misma venta vuelve a aparecer en la base local, no se duplica
+    await using (var local = await fabricaLocal.CreateDbContextAsync())
+    {
+        local.VentasPendientes.Add(new MiPOS.DatosLocal.VentaPendiente
+        {
+            IdentificadorUnico = venta.IdentificadorUnico.Value,
+            Fecha = venta.Fecha,
+            Datos = System.Text.Json.JsonSerializer.Serialize(venta, MiPOS.DatosLocal.ValorLocal.OpcionesJson)
+        });
+        await local.SaveChangesAsync();
+    }
+    await sincronizacion.SincronizarAsync();
+    await using (var contexto = await fabrica.CreateDbContextAsync())
+    {
+        var cantidad = await contexto.Ventas.CountAsync(v => v.IdentificadorUnico == venta.IdentificadorUnico);
+        Console.WriteLine($"Subir dos veces la misma venta no la duplica: {(cantidad == 1 && await LeerStockAsync(fabrica, producto.Id) == stockDespues ? "OK" : "ERROR")}");
+    }
+
+    var resumen = await cajaServicio.CerrarTurnoAsync(0);
+    Console.WriteLine($"Con todo subido, la caja cierra: OK (diferencia {resumen.Turno.Diferencia:N2})");
 }
 
 static async Task ProbarCajaAsync(PooledDbContextFactory<MiPOSDbContext> fabrica, Usuario administrador)

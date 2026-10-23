@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using MiPOS.Datos;
 using MiPOS.Dominio.Entidades;
+using MiPOS.Negocio.SinConexion;
 using MiPOS.Negocio.Usuarios;
 using MiPOS.Seguridad;
 
@@ -21,21 +22,38 @@ public class UsuarioServicio
     // para que la respuesta tarde lo mismo que cuando existe.
     private static readonly Lazy<string> _hashFicticio = new(() => HashContrasena.Generar(Guid.NewGuid().ToString()));
 
+    // Sin conexión, los intentos fallidos se cuentan en memoria (la copia local de los usuarios no se modifica)
+    private static readonly Dictionary<string, (int Intentos, DateTime? BloqueadoHastaUtc)> _intentosSinConexion = new();
+
     private readonly IDbContextFactory<MiPOSDbContext> _fabrica;
     private readonly Sesion _sesion;
+    private readonly BaseLocal? _baseLocal;
 
-    public UsuarioServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion)
+    public UsuarioServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion, BaseLocal? baseLocal = null)
     {
         _fabrica = fabrica;
         _sesion = sesion;
+        _baseLocal = baseLocal;
     }
 
     // ----- Inicio de sesión -----
 
     public async Task<bool> ExisteAlgunUsuarioAsync()
     {
-        await using var contexto = await _fabrica.CreateDbContextAsync();
-        return await contexto.Usuarios.AnyAsync();
+        try
+        {
+            await using var contexto = await _fabrica.CreateDbContextAsync();
+            return await contexto.Usuarios.AnyAsync();
+        }
+        catch (Exception ex) when (_baseLocal?.EsCorte(ex) == true)
+        {
+            // Sin conexión solo se puede entrar si esta caja ya tiene la copia de los usuarios
+            await using var local = await _baseLocal.CrearContextoAsync();
+            if (await local.Usuarios.AnyAsync())
+                return true;
+
+            throw;
+        }
     }
 
     // Solo funciona si todavía no hay ningún usuario (primer arranque). Deja la sesión iniciada.
@@ -99,6 +117,62 @@ public class UsuarioServicio
         if (nombreUsuario.Length == 0 || string.IsNullOrEmpty(contrasena))
             throw new UsuarioInvalidoException("Ingrese usuario y contraseña.");
 
+        if (_baseLocal?.UsarLocal == true)
+            return await ValidarSinConexionAsync(nombreUsuario, contrasena);
+
+        try
+        {
+            return await ValidarEnBaseCentralAsync(nombreUsuario, contrasena);
+        }
+        catch (Exception ex) when (_baseLocal?.EsCorte(ex) == true)
+        {
+            return await ValidarSinConexionAsync(nombreUsuario, contrasena);
+        }
+    }
+
+    // Lo mismo que en la base central, contra la copia local de los usuarios (solo los activos).
+    // El bloqueo por intentos fallidos vale solo para esta caja mientras dure el corte.
+    private async Task<Usuario> ValidarSinConexionAsync(string nombreUsuario, string contrasena)
+    {
+        await using var local = await _baseLocal!.CrearContextoAsync();
+        var usuario = await local.Usuarios.AsNoTracking().FirstOrDefaultAsync(u => u.NombreUsuario == nombreUsuario);
+
+        var ahora = DateTime.UtcNow;
+        (int Intentos, DateTime? BloqueadoHastaUtc) estado;
+        lock (_intentosSinConexion)
+            _intentosSinConexion.TryGetValue(nombreUsuario, out estado);
+
+        if (estado.BloqueadoHastaUtc > ahora)
+        {
+            var segundos = Math.Ceiling((estado.BloqueadoHastaUtc.Value - ahora).TotalSeconds);
+            throw new UsuarioInvalidoException($"Usuario bloqueado por demasiados intentos fallidos. Espere {segundos} segundos.");
+        }
+
+        if (!await VerificarAsync(contrasena, usuario?.ContrasenaHash ?? _hashFicticio.Value) || usuario is null)
+        {
+            estado.Intentos++;
+            var bloqueado = estado.Intentos >= IntentosPermitidos;
+            estado = bloqueado ? (0, ahora + TiempoBloqueo) : (estado.Intentos, null);
+
+            lock (_intentosSinConexion)
+                _intentosSinConexion[nombreUsuario] = estado;
+
+            throw new UsuarioInvalidoException(bloqueado
+                ? $"Demasiados intentos fallidos. El usuario queda bloqueado por {TiempoBloqueo.TotalSeconds} segundos."
+                : MensajeCredencialesIncorrectas);
+        }
+
+        lock (_intentosSinConexion)
+            _intentosSinConexion.Remove(nombreUsuario);
+
+        if (!usuario.Activo)
+            throw new UsuarioInvalidoException("El usuario está desactivado. Consulte con un administrador.");
+
+        return usuario;
+    }
+
+    private async Task<Usuario> ValidarEnBaseCentralAsync(string nombreUsuario, string contrasena)
+    {
         await using var contexto = await _fabrica.CreateDbContextAsync();
 
         var usuario = await contexto.Usuarios.FirstOrDefaultAsync(u => u.NombreUsuario == nombreUsuario);

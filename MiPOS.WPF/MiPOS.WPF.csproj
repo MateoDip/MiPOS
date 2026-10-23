@@ -6,6 +6,7 @@
     <ProjectReference Include="..\MiPOS.Seguridad\MiPOS.Seguridad.csproj" />
     <ProjectReference Include="..\MiPOS.Hardware\MiPOS.Hardware.csproj" />
     <ProjectReference Include="..\MiPOS.Facturacion\MiPOS.Facturacion.csproj" />
+    <ProjectReference Include="..\MiPOS.DatosLocal\MiPOS.DatosLocal.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using MiPOS.Datos;
+using MiPOS.DatosLocal;
 using MiPOS.Facturacion;
 using MiPOS.Facturacion.Arca;
 using MiPOS.Hardware.Cajon;
@@ -15,6 +16,7 @@ using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Comprobantes;
 using MiPOS.Negocio.Facturacion;
 using MiPOS.Negocio.Servicios;
+using MiPOS.Negocio.SinConexion;
 using MiPOS.Seguridad;
 using MiPOS.WPF.Servicios;
 using MiPOS.WPF.ViewModels;
@@ -53,7 +55,10 @@ public partial class App : Application
         RegistrarServicios(servicios, configuracion);
         _proveedor = servicios.BuildServiceProvider();
 
-        // 4. Empezar por el inicio de sesión
+        // 4. Crear la base local de la caja (para vender sin conexión), si todavía no existe
+        _proveedor.GetRequiredService<BaseLocal>().Preparar();
+
+        // 5. Empezar por el inicio de sesión
         MostrarInicioSesion();
     }
 
@@ -63,9 +68,16 @@ public partial class App : Application
         servicios.AddDbContextFactory<MiPOSDbContext>(opciones =>
             opciones.UseSqlServer(configuracion.GetConnectionString("MiPOS")));
 
-        // Única excepción a "todo Transient": la sesión tiene que ser
+        // Base local SQLite de la caja (Fase 8): se usa cuando no hay conexión con la base central
+        var opcionesSinConexion = configuracion.GetSection("SinConexion").Get<OpcionesSinConexion>() ?? new OpcionesSinConexion();
+        servicios.AddSingleton(opcionesSinConexion);
+        servicios.AddDbContextFactory<LocalDbContext>(opciones =>
+            opciones.UseSqlite($"Data Source={opcionesSinConexion.RutaCompleta}"));
+
+        // Únicas excepciones a "todo Transient": la sesión y el estado de la conexión tienen que ser
         // un solo objeto compartido por toda la aplicación
         servicios.AddSingleton<Sesion>();
+        servicios.AddSingleton<BaseLocal>();
 
         // Qué caja es esta PC (cada PC tiene su número)
         servicios.AddTransient(_ => configuracion.GetSection("Caja").Get<OpcionesCaja>() ?? new OpcionesCaja());
@@ -121,6 +133,7 @@ public partial class App : Application
         servicios.AddTransient<CajaServicio>();
         servicios.AddTransient<StockServicio>();
         servicios.AddTransient<CompraServicio>();
+        servicios.AddTransient<SincronizacionServicio>();
         servicios.AddTransient<DialogoServicio>();
         servicios.AddTransient<LoginViewModel>();
         servicios.AddTransient<CajaViewModel>();
