@@ -237,7 +237,9 @@ public class UsuarioServicio
             .ToListAsync();
     }
 
-    public async Task<Usuario> CrearAsync(string nombreUsuario, string nombreCompleto, string contrasena, Rol rol)
+    // idioma: código del idioma de la interfaz para este usuario ("es", "zh"); null = el de la caja
+    public async Task<Usuario> CrearAsync(string nombreUsuario, string nombreCompleto, string contrasena, Rol rol,
+                                          string? idioma = null)
     {
         _sesion.Exigir(Permiso.GestionarUsuarios);
 
@@ -247,6 +249,7 @@ public class UsuarioServicio
         ValidarNombreCompleto(nombreCompleto);
         ValidarContrasena(contrasena);
         ValidarRol(rol);
+        idioma = NormalizarIdioma(idioma);
 
         await using var contexto = await _fabrica.CreateDbContextAsync();
 
@@ -259,6 +262,7 @@ public class UsuarioServicio
             NombreCompleto = nombreCompleto,
             ContrasenaHash = await GenerarHashAsync(contrasena),
             Rol = rol,
+            Idioma = idioma,
             FechaAlta = DateTime.Now
         };
 
@@ -267,8 +271,9 @@ public class UsuarioServicio
         return usuario;
     }
 
-    // El nombre de usuario no se puede cambiar (es con lo que se identifica en las ventas)
-    public async Task ModificarAsync(int id, string nombreCompleto, Rol rol)
+    // El nombre de usuario no se puede cambiar (es con lo que se identifica en las ventas).
+    // idioma: null = el de la caja. El cambio de idioma vale desde el próximo inicio de sesión.
+    public async Task ModificarAsync(int id, string nombreCompleto, Rol rol, string? idioma = null)
     {
         _sesion.Exigir(Permiso.GestionarUsuarios);
         var actual = _sesion.ExigirUsuario();
@@ -276,6 +281,7 @@ public class UsuarioServicio
         nombreCompleto = nombreCompleto?.Trim() ?? string.Empty;
         ValidarNombreCompleto(nombreCompleto);
         ValidarRol(rol);
+        idioma = NormalizarIdioma(idioma);
 
         await using var contexto = await _fabrica.CreateDbContextAsync();
         var usuario = await BuscarAsync(contexto, id);
@@ -291,11 +297,15 @@ public class UsuarioServicio
 
         usuario.NombreCompleto = nombreCompleto;
         usuario.Rol = rol;
+        usuario.Idioma = idioma;
         await contexto.SaveChangesAsync();
 
         // Si se modificó a sí mismo, se actualiza el nombre que muestra la pantalla
         if (usuario.Id == actual.Id)
+        {
             actual.NombreCompleto = nombreCompleto;
+            actual.Idioma = idioma;
+        }
     }
 
     public async Task CambiarActivoAsync(int id, bool activo)
@@ -397,6 +407,19 @@ public class UsuarioServicio
     {
         if (!Enum.IsDefined(rol))
             throw new UsuarioInvalidoException("Rol inválido.");
+    }
+
+    // Código de idioma en minúsculas (ej: "es", "zh"), o null para usar el de la caja
+    private static string? NormalizarIdioma(string? idioma)
+    {
+        if (string.IsNullOrWhiteSpace(idioma))
+            return null;
+
+        idioma = idioma.Trim().ToLowerInvariant();
+        if (idioma.Length is < 2 or > 10 || !idioma.All(char.IsAsciiLetterLower))
+            throw new UsuarioInvalidoException("Idioma inválido.");
+
+        return idioma;
     }
 
     // El hash tarda: se calcula fuera del hilo de la pantalla para que no se congele

@@ -38,6 +38,12 @@
                   SelectedItem="{Binding RolSeleccionado}"
                   Padding="6"/>
 
+        <TextBlock Text="Idioma" Margin="0,12,0,4"/>
+        <ComboBox ItemsSource="{Binding Idiomas}"
+                  DisplayMemberPath="Nombre" SelectedValuePath="Codigo"
+                  SelectedValue="{Binding IdiomaSeleccionado}"
+                  Padding="6"/>
+
         <!-- Solo al crear: para cambiarla después se usa "Restablecer contraseña" -->
         <StackPanel Visibility="{Binding EsNuevo, Converter={StaticResource VisibleSiEsTrue}}">
             <TextBlock Text="Contraseña" Margin="0,12,0,4"/>

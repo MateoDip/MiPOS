@@ -5,6 +5,7 @@ using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Facturacion;
 using MiPOS.Negocio.Ventas;
 using MiPOS.Seguridad;
+using MiPOS.WPF.Idiomas;
 using MiPOS.WPF.ViewModels;
 using MiPOS.WPF.Vistas;
 
@@ -26,7 +27,7 @@ public class DialogoServicio
     // Devuelve true solo si el usuario eligió "Sí". Por defecto queda marcado "No".
     public bool Confirmar(string mensaje, string titulo)
     {
-        var resultado = MessageBox.Show(VentanaActiva(), mensaje, titulo,
+        var resultado = MessageBox.Show(VentanaActiva(), Traductor.Traducir(mensaje), Traductor.Traducir(titulo),
             MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
 
         return resultado == MessageBoxResult.Yes;
@@ -287,7 +288,12 @@ public class DialogoServicio
     // Ruta del archivo elegido, o null si se canceló. filtro: "Descripción (*.ext)|*.ext"
     public string? ElegirArchivo(string titulo, string filtro)
     {
-        var dialogo = new Microsoft.Win32.OpenFileDialog { Title = titulo, Filter = filtro, CheckFileExists = true };
+        var dialogo = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = Traductor.Traducir(titulo),
+            Filter = Traductor.Traducir(filtro),
+            CheckFileExists = true
+        };
         var elegido = VentanaActiva() is { } duenio ? dialogo.ShowDialog(duenio) : dialogo.ShowDialog();
         return elegido == true ? dialogo.FileName : null;
     }

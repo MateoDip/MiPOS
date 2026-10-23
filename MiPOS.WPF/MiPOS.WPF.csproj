@@ -24,6 +24,10 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 	<ItemGroup>
+		<!-- Catálogos de traducción (Idiomas/zh.json...): van dentro del programa -->
+		<EmbeddedResource Include="Idiomas\*.json" LogicalName="Idiomas.%(Filename)%(Extension)" />
+	</ItemGroup>
+	<ItemGroup>
 		<None Update="appsettings.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>

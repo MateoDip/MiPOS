@@ -19,6 +19,7 @@ using MiPOS.Negocio.Licencias;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Negocio.SinConexion;
 using MiPOS.Seguridad;
+using MiPOS.WPF.Idiomas;
 using MiPOS.WPF.Servicios;
 using MiPOS.WPF.ViewModels;
 using MiPOS.WPF.Vistas;
@@ -28,6 +29,9 @@ namespace MiPOS.WPF;
 public partial class App : Application
 {
     private ServiceProvider _proveedor = null!;
+
+    // Idioma de esta caja (Idioma:Predeterminado): el del inicio de sesión y el de los usuarios sin uno propio
+    private string _idiomaCaja = Traductor.Espanol;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -59,11 +63,16 @@ public partial class App : Application
         // 4. Crear la base local de la caja (para vender sin conexión), si todavía no existe
         _proveedor.GetRequiredService<BaseLocal>().Preparar();
 
-        // 5. Sin licencia válida se muestra el código de instalación (se puede seguir en modo demostración)
+        // 5. Idioma: cada ventana se traduce al abrirse (ver Idiomas/TraduccionVentanas)
+        _idiomaCaja = configuracion.GetSection("Idioma").Get<OpcionesIdioma>()?.Predeterminado ?? Traductor.Espanol;
+        Traductor.Usar(_idiomaCaja);
+        TraduccionVentanas.Activar();
+
+        // 6. Sin licencia válida se muestra el código de instalación (se puede seguir en modo demostración)
         if (!_proveedor.GetRequiredService<LicenciaServicio>().EsValida)
             _proveedor.GetRequiredService<DialogoServicio>().GestionarLicencia();
 
-        // 6. Empezar por el inicio de sesión
+        // 7. Empezar por el inicio de sesión
         MostrarInicioSesion();
     }
 
@@ -172,6 +181,9 @@ public partial class App : Application
 
     private void MostrarInicioSesion()
     {
+        // El inicio de sesión sale en el idioma de la caja (todavía no se sabe quién va a entrar)
+        Traductor.Usar(_idiomaCaja);
+
         var viewModel = _proveedor.GetRequiredService<LoginViewModel>();
         var login = new LoginVentana(viewModel);
         MainWindow = login;
@@ -183,6 +195,9 @@ public partial class App : Application
             Shutdown();
             return;
         }
+
+        // Desde acá, cada ventana sale en el idioma del usuario que entró (o en el de la caja)
+        Traductor.Usar(_proveedor.GetRequiredService<Sesion>().UsuarioActual?.Idioma ?? _idiomaCaja);
 
         // Cada sesión usa una caja nueva (con su propio carrito vacío)
         var caja = _proveedor.GetRequiredService<CajaVentana>();

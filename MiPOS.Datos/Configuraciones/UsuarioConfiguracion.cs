@@ -29,6 +29,9 @@ public class UsuarioConfiguracion : IEntityTypeConfiguration<Usuario>
         // El rol se guarda como número (Cajero = 1, Administrador = 2)
         builder.Property(u => u.Rol).HasConversion<int>();
 
+        // Código de idioma (ej: "es", "zh"); null = el de la caja
+        builder.Property(u => u.Idioma).HasMaxLength(10);
+
         // No hay datos iniciales: el primer administrador se crea en el primer arranque
     }
 }

@@ -15,6 +15,9 @@ public class Usuario
 
     public Rol Rol { get; set; }
 
+    // Idioma de las pantallas para este usuario ("es", "zh"). null = el de la caja (Idioma:Predeterminado)
+    public string? Idioma { get; set; }
+
     // Los usuarios no se borran: se desactivan
     public bool Activo { get; set; } = true;
 

@@ -15,7 +15,8 @@ namespace MiPOS.DatosLocal;
 public class LocalDbContext : DbContext
 {
     // Subir este número cuando cambie alguna tabla de la base local
-    public const int VersionEsquema = 1;
+    // 2: Usuario.Idioma (Fase 10)
+    public const int VersionEsquema = 2;
 
     private const string ClaveVersion = "VersionEsquema";
 
@@ -34,8 +35,9 @@ public class LocalDbContext : DbContext
     }
 
     /// <summary>
-    /// Crea la base local si no existe. Si existe con otra versión de la estructura y no tiene
-    /// ventas pendientes, la vuelve a crear (la copia del catálogo se descarga de nuevo).
+    /// Crea la base local si no existe. Si existe con otra versión de la estructura, la vuelve a crear
+    /// (la copia del catálogo se descarga de nuevo) conservando las ventas pendientes de subir:
+    /// la tabla VentasPendientes no cambia entre versiones.
     /// </summary>
     public void Preparar()
     {
@@ -46,23 +48,36 @@ public class LocalDbContext : DbContext
         }
 
         int? version = null;
-        var hayPendientes = false;
         try
         {
-            version = int.TryParse(Valores.Find(ClaveVersion)?.Valor, out var leida) ? leida : null;
-            hayPendientes = VentasPendientes.Any();
+            version = int.TryParse(Valores.AsNoTracking().FirstOrDefault(v => v.Clave == ClaveVersion)?.Valor, out var leida)
+                ? leida : null;
         }
         catch (Exception)
         {
             // La estructura es tan distinta que ni siquiera se puede leer: se recrea
         }
 
-        // Nunca se borran ventas sin subir
-        if (version == VersionEsquema || hayPendientes)
+        if (version == VersionEsquema)
             return;
+
+        // Nunca se pierden ventas sin subir: se leen antes de recrear y se vuelven a guardar.
+        // Si no se pueden leer, no se toca nada (mejor una caja sin modo sin conexión que perder ventas).
+        List<VentaPendiente> pendientes;
+        try
+        {
+            pendientes = VentasPendientes.AsNoTracking().ToList();
+        }
+        catch (Exception)
+        {
+            pendientes = new();
+            if (version is not null)
+                throw;
+        }
 
         Database.EnsureDeleted();
         Database.EnsureCreated();
+        VentasPendientes.AddRange(pendientes);
         GuardarVersion();
     }
 

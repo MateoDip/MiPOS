@@ -39,6 +39,9 @@ public partial class LicenciaViewModel : ObservableObject
     private string estado = string.Empty;
 
     [ObservableProperty]
+    private string avisoVencimiento = string.Empty;
+
+    [ObservableProperty]
     private string mensaje = string.Empty;
 
     [ObservableProperty]
@@ -55,8 +58,10 @@ public partial class LicenciaViewModel : ObservableObject
         EsValida = resultado.EsValida;
         Estado = resultado.Descripcion;
 
-        if (resultado.DiasParaVencer(DateOnly.FromDateTime(DateTime.Today)) is int dias && dias <= 15)
-            Estado += dias <= 0 ? " Vence hoy." : $" Vence en {dias} días: pida la renovación.";
+        // Aparte del estado (y no sumado al mismo texto), para que cada uno se pueda traducir
+        AvisoVencimiento = resultado.DiasParaVencer(DateOnly.FromDateTime(DateTime.Today)) is int dias && dias <= 15
+            ? (dias <= 0 ? "Vence hoy." : $"Vence en {dias} días: pida la renovación.")
+            : string.Empty;
 
         OnPropertyChanged(nameof(PuedeInstalar));
         InstalarCommand.NotifyCanExecuteChanged();

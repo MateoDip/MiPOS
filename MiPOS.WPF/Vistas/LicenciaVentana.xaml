@@ -26,6 +26,7 @@
 
         <TextBlock Text="Licencia de esta PC" FontSize="22" FontWeight="Bold"/>
         <TextBlock Text="{Binding Estado}" TextWrapping="Wrap" Margin="0,8,0,0"/>
+        <TextBlock Text="{Binding AvisoVencimiento}" TextWrapping="Wrap" Foreground="DarkOrange" FontWeight="SemiBold"/>
 
         <TextBlock Text="Código de instalación (envíeselo a su proveedor para recibir la licencia):"
                    TextWrapping="Wrap" Margin="0,16,0,4" Foreground="Gray"/>

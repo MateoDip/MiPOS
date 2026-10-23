@@ -4,8 +4,12 @@ using MiPOS.Dominio.Entidades;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Negocio.Usuarios;
 using MiPOS.Seguridad;
+using MiPOS.WPF.Idiomas;
 
 namespace MiPOS.WPF.ViewModels;
+
+// Una opción de la lista de idiomas: código ("" = el de la caja) y nombre
+public record OpcionIdioma(string Codigo, string Nombre);
 
 /// <summary>
 /// Alta de un usuario nuevo o edición de uno existente (nombre completo y rol).
@@ -49,6 +53,15 @@ public partial class UsuarioEdicionViewModel : ObservableObject
     [ObservableProperty]
     private Rol rolSeleccionado = Rol.Cajero;
 
+    // Idioma de las pantallas para este usuario. Código vacío = el de la caja.
+    public IReadOnlyList<OpcionIdioma> Idiomas { get; } =
+        new[] { new OpcionIdioma(string.Empty, Traductor.Traducir("Idioma de la caja (predeterminado)")) }
+            .Concat(Traductor.Disponibles.Select(i => new OpcionIdioma(i.Codigo, i.Nombre)))
+            .ToList();
+
+    [ObservableProperty]
+    private string idiomaSeleccionado = string.Empty;
+
     [ObservableProperty]
     private string mensaje = string.Empty;
 
@@ -65,6 +78,7 @@ public partial class UsuarioEdicionViewModel : ObservableObject
         NombreUsuario = usuario.NombreUsuario;
         NombreCompleto = usuario.NombreCompleto;
         RolSeleccionado = usuario.Rol;
+        IdiomaSeleccionado = usuario.Idioma ?? string.Empty;
     }
 
     // Enter
@@ -84,10 +98,11 @@ public partial class UsuarioEdicionViewModel : ObservableObject
             Guardando = true;
             Mensaje = "Guardando...";
 
+            var idioma = IdiomaSeleccionado.Length == 0 ? null : IdiomaSeleccionado;
             if (_id is int id)
-                await _usuarioServicio.ModificarAsync(id, NombreCompleto, RolSeleccionado);
+                await _usuarioServicio.ModificarAsync(id, NombreCompleto, RolSeleccionado, idioma);
             else
-                await _usuarioServicio.CrearAsync(NombreUsuario, NombreCompleto, Contrasena, RolSeleccionado);
+                await _usuarioServicio.CrearAsync(NombreUsuario, NombreCompleto, Contrasena, RolSeleccionado, idioma);
 
             guardado = true;
         }

@@ -703,6 +703,10 @@ namespace MiPOS.Datos.Migrations
                     b.Property<DateTime>("FechaAlta")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Idioma")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
+
                     b.Property<int>("IntentosFallidos")
                         .HasColumnType("int");
 
