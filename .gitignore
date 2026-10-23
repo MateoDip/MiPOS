@@ -480,3 +480,7 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Licencias de MiPOS y claves (nunca al repositorio)
+*.lic
+clave-privada*.txt

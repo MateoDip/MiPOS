@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Herramienta de quien vende el sistema para emitir licencias (no se instala en los comercios).
+       Necesita la clave privada, que se guarda fuera del repositorio (ver MiPOS.Licencias/LEEME.md). -->
+  <ItemGroup>
+    <ProjectReference Include="..\MiPOS.Licencias\MiPOS.Licencias.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

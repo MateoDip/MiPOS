@@ -33,6 +33,7 @@
         <KeyBinding Key="F" Modifiers="Control" Command="{Binding VerFacturasPendientesCommand}"/>
         <KeyBinding Key="G" Modifiers="Control" Command="{Binding AbrirCajonManualCommand}"/>
         <KeyBinding Key="H" Modifiers="Control" Command="{Binding ProbarHardwareCommand}"/>
+        <KeyBinding Key="L" Modifiers="Control" Command="{Binding GestionarLicenciaCommand}"/>
     </Window.InputBindings>
 
     <Window.Resources>
@@ -63,6 +64,8 @@
                 <TextBlock Text="{Binding AvisoStock}" Foreground="DarkOrange" FontWeight="SemiBold"
                            VerticalAlignment="Center" Margin="24,0,0,0"/>
                 <TextBlock Text="{Binding AvisoFacturas}" Foreground="Firebrick" FontWeight="SemiBold"
+                           VerticalAlignment="Center" Margin="24,0,0,0"/>
+                <TextBlock Text="{Binding AvisoLicencia}" Foreground="DarkOrange" FontWeight="Bold"
                            VerticalAlignment="Center" Margin="24,0,0,0"/>
                 <TextBlock Text="{Binding AvisoConexion}" Foreground="White" Background="Firebrick" FontWeight="Bold"
                            Padding="8,2" VerticalAlignment="Center" Margin="24,0,0,0"

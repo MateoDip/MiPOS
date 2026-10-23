@@ -190,6 +190,37 @@ foreach (var linea in lineasPrueba)
     Console.WriteLine($"|{linea.PadRight(32)}|");
 Console.WriteLine($"Ninguna línea supera el ancho y la regla ocupa la línea justa: {(lineasPrueba.All(l => l.Length <= 32) && lineasPrueba.Any(l => l == "12345678901234567890123456789012") ? "OK" : "ERROR")}");
 
+// --- Prueba 15: licencias (Fase 9, sin base de datos) ---
+Console.WriteLine("\n=== Licencias ===");
+var codigoPc = MiPOS.Licencias.CodigoInstalacion.Calcular("4c4c4544-0042-1234-8056-b2c04f4d3233");
+Console.WriteLine($"Código de instalación con formato XXXX-XXXX-XXXX-XXXX: {(System.Text.RegularExpressions.Regex.IsMatch(codigoPc, "^[A-Z2-9]{4}(-[A-Z2-9]{4}){3}$") ? "OK" : "ERROR")} ({codigoPc})");
+Console.WriteLine($"El mismo identificador da siempre el mismo código: {(codigoPc == MiPOS.Licencias.CodigoInstalacion.Calcular("4C4C4544-0042-1234-8056-B2C04F4D3233") ? "OK" : "ERROR")}");
+Console.WriteLine($"Otro identificador da otro código: {(codigoPc != MiPOS.Licencias.CodigoInstalacion.Calcular("otra-pc") ? "OK" : "ERROR")}");
+Console.WriteLine($"Código de esta PC: {MiPOS.Licencias.CodigoInstalacion.DeEstaPc}");
+
+var (privadaPrueba, publicaPrueba) = MiPOS.Licencias.ArchivoLicencia.GenerarClaves();
+var hoy = new DateOnly(2026, 10, 23);
+var licenciaPrueba = new MiPOS.Licencias.Licencia
+{
+    Numero = "PRUEBA-1", Comercio = "Almacén Don Pepe", CodigoInstalacion = codigoPc,
+    Emision = hoy, Vencimiento = hoy.AddDays(30)
+};
+var textoLicencia = MiPOS.Licencias.ArchivoLicencia.Firmar(licenciaPrueba, privadaPrueba);
+Console.WriteLine($"Licencia firmada es válida: {(MiPOS.Licencias.ArchivoLicencia.VerificarTexto(textoLicencia, codigoPc, hoy, publicaPrueba).EsValida ? "OK" : "ERROR")}");
+Console.WriteLine($"El código se acepta sin guiones y en minúsculas: {(MiPOS.Licencias.ArchivoLicencia.VerificarTexto(textoLicencia, codigoPc.Replace("-", "").ToLowerInvariant(), hoy, publicaPrueba).EsValida ? "OK" : "ERROR")}");
+Console.WriteLine($"En otra PC no vale: {(MiPOS.Licencias.ArchivoLicencia.VerificarTexto(textoLicencia, "AAAA-BBBB-CCCC-DDDD", hoy, publicaPrueba).Estado == MiPOS.Licencias.EstadoLicencia.OtraInstalacion ? "OK" : "ERROR")}");
+Console.WriteLine($"Vencida no vale: {(MiPOS.Licencias.ArchivoLicencia.VerificarTexto(textoLicencia, codigoPc, hoy.AddDays(31), publicaPrueba).Estado == MiPOS.Licencias.EstadoLicencia.Vencida ? "OK" : "ERROR")}");
+Console.WriteLine($"Avisa los días que faltan: {(MiPOS.Licencias.ArchivoLicencia.VerificarTexto(textoLicencia, codigoPc, hoy.AddDays(25), publicaPrueba).DiasParaVencer(hoy.AddDays(25)) == 5 ? "OK" : "ERROR")}");
+Console.WriteLine($"Firmada con otra clave no vale: {(MiPOS.Licencias.ArchivoLicencia.VerificarTexto(textoLicencia, codigoPc, hoy, MiPOS.Licencias.ArchivoLicencia.GenerarClaves().Publica).Estado == MiPOS.Licencias.EstadoLicencia.Invalida ? "OK" : "ERROR")}");
+
+// Cambiar un dato (por ejemplo, el vencimiento) rompe la firma
+var contenidoLicencia = System.Text.Json.Nodes.JsonNode.Parse(textoLicencia)!;
+var datosLicencia = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(contenidoLicencia["Datos"]!.GetValue<string>()));
+contenidoLicencia["Datos"] = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(datosLicencia.Replace(hoy.AddDays(30).ToString("yyyy-MM-dd"), "2099-12-31")));
+Console.WriteLine($"Licencia modificada no vale: {(MiPOS.Licencias.ArchivoLicencia.VerificarTexto(contenidoLicencia.ToJsonString(), codigoPc, hoy, publicaPrueba).Estado == MiPOS.Licencias.EstadoLicencia.Invalida ? "OK" : "ERROR")}");
+Console.WriteLine($"Texto cualquiera no vale: {(MiPOS.Licencias.ArchivoLicencia.VerificarTexto("hola", codigoPc, hoy, publicaPrueba).Estado == MiPOS.Licencias.EstadoLicencia.Invalida ? "OK" : "ERROR")}");
+Console.WriteLine($"Sin archivo: modo demostración: {(MiPOS.Licencias.ArchivoLicencia.Verificar(Path.Combine(Path.GetTempPath(), "no-existe.lic"), codigoPc, hoy).Estado == MiPOS.Licencias.EstadoLicencia.NoEncontrada ? "OK" : "ERROR")}");
+
 // --- Prueba 9: control de caja (contra la base real) ---
 // Se usa una caja de pruebas (N° 99) para no tocar el turno de la Caja 1.
 // Las ventas de esta prueba quedan registradas en la base de desarrollo, en la caja 99.

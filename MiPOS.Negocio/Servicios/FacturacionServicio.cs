@@ -31,10 +31,13 @@ public class FacturacionServicio
     private readonly DatosFiscales _datosFiscales;
     private readonly DatosComercio _comercio;
     private readonly IServicioArca _arca;
+    private readonly LicenciaServicio? _licencia;
 
     public FacturacionServicio(IDbContextFactory<MiPOSDbContext> fabrica, Sesion sesion, OpcionesFacturacion opciones,
-                               DatosFiscales datosFiscales, DatosComercio comercio, IServicioArca arca)
+                               DatosFiscales datosFiscales, DatosComercio comercio, IServicioArca arca,
+                               LicenciaServicio? licencia = null)
     {
+        _licencia = licencia;
         _fabrica = fabrica;
         _sesion = sesion;
         _opciones = opciones;
@@ -68,6 +71,11 @@ public class FacturacionServicio
 
         _opciones.Validar();
         CuitEmisor(); // si la configuración está mal, mejor saberlo antes de cobrar
+
+        // En modo demostración (sin licencia) se puede probar todo, pero no emitir facturas reales
+        if (_opciones.Modo == ModoFacturacion.Produccion && _licencia?.EsValida == false)
+            throw new FacturaInvalidaException(
+                "Esta PC no tiene una licencia válida: no se pueden emitir facturas reales (Facturacion:Modo = Produccion). Instale la licencia con Ctrl+L.");
 
         receptor ??= DatosReceptor.ConsumidorFinal;
 

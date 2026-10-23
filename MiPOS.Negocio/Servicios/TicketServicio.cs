@@ -17,11 +17,13 @@ public class TicketServicio
     private readonly DatosFiscales _datosFiscales;
     private readonly FacturacionServicio _facturacion;
     private readonly BaseLocal? _baseLocal;
+    private readonly LicenciaServicio? _licencia;
 
     public TicketServicio(IDbContextFactory<MiPOSDbContext> fabrica, DatosComercio comercio, Sesion sesion,
                           CajaServicio cajaServicio, DatosFiscales datosFiscales, FacturacionServicio facturacion,
-                          BaseLocal? baseLocal = null)
+                          BaseLocal? baseLocal = null, LicenciaServicio? licencia = null)
     {
+        _licencia = licencia;
         _fabrica = fabrica;
         _comercio = comercio;
         _sesion = sesion;
@@ -42,7 +44,7 @@ public class TicketServicio
         if (_baseLocal is not null && await _baseLocal.LeerVentaPendienteAsync(identificador) is { } pendiente)
         {
             var lineas = TicketVenta.Armar(pendiente, _comercio, _datosFiscales, caracteresPorLinea, esReimpresion);
-            return new TicketParaImprimir(lineas, null);
+            return new TicketParaImprimir(MarcarDemostracion(lineas, caracteresPorLinea), null);
         }
 
         await using var contexto = await _fabrica.CreateDbContextAsync();
@@ -79,13 +81,24 @@ public class TicketServicio
 
         var lineas = TicketVenta.Armar(venta, _comercio, _datosFiscales, caracteresPorLinea, esReimpresion);
         var qr = venta.Factura is null ? null : _facturacion.ArmarQr(venta.Factura);
-        return new TicketParaImprimir(lineas, qr);
+        return new TicketParaImprimir(MarcarDemostracion(lineas, caracteresPorLinea), qr);
     }
 
     // Comprobante de cierre de caja (arqueo) de un turno, armado desde la base
     public async Task<IReadOnlyList<string>> ArmarCierreAsync(int turnoId, int caracteresPorLinea)
     {
         var resumen = await _cajaServicio.ObtenerResumenAsync(turnoId);
-        return TicketCierreCaja.Armar(resumen, _comercio, caracteresPorLinea);
+        return MarcarDemostracion(TicketCierreCaja.Armar(resumen, _comercio, caracteresPorLinea), caracteresPorLinea);
+    }
+
+    // Sin licencia válida, todos los comprobantes salen marcados
+    private IReadOnlyList<string> MarcarDemostracion(IReadOnlyList<string> lineas, int ancho)
+    {
+        if (_licencia?.EsValida != false)
+            return lineas;
+
+        var marcadas = lineas.ToList();
+        FormatoTicket.Centrar(marcadas, "*** MODO DEMOSTRACIÓN - SIN LICENCIA ***", ancho);
+        return marcadas;
     }
 }

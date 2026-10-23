@@ -15,6 +15,7 @@ using MiPOS.Hardware.Terminal;
 using MiPOS.Negocio.Cajas;
 using MiPOS.Negocio.Comprobantes;
 using MiPOS.Negocio.Facturacion;
+using MiPOS.Negocio.Licencias;
 using MiPOS.Negocio.Servicios;
 using MiPOS.Negocio.SinConexion;
 using MiPOS.Seguridad;
@@ -58,7 +59,11 @@ public partial class App : Application
         // 4. Crear la base local de la caja (para vender sin conexión), si todavía no existe
         _proveedor.GetRequiredService<BaseLocal>().Preparar();
 
-        // 5. Empezar por el inicio de sesión
+        // 5. Sin licencia válida se muestra el código de instalación (se puede seguir en modo demostración)
+        if (!_proveedor.GetRequiredService<LicenciaServicio>().EsValida)
+            _proveedor.GetRequiredService<DialogoServicio>().GestionarLicencia();
+
+        // 6. Empezar por el inicio de sesión
         MostrarInicioSesion();
     }
 
@@ -134,6 +139,9 @@ public partial class App : Application
         servicios.AddTransient<StockServicio>();
         servicios.AddTransient<CompraServicio>();
         servicios.AddTransient<SincronizacionServicio>();
+        servicios.AddTransient(_ => configuracion.GetSection("Licencia").Get<OpcionesLicencia>() ?? new OpcionesLicencia());
+        servicios.AddTransient<LicenciaServicio>();
+        servicios.AddTransient<LicenciaViewModel>();
         servicios.AddTransient<DialogoServicio>();
         servicios.AddTransient<LoginViewModel>();
         servicios.AddTransient<CajaViewModel>();

@@ -268,6 +268,42 @@ public class DialogoServicio
         new HardwareVentana(viewModel) { Owner = VentanaActiva() }.ShowDialog();
     }
 
+    // Ctrl+L (y al arrancar, si no hay licencia válida): ver e instalar la licencia de esta PC
+    public void GestionarLicencia()
+    {
+        var viewModel = _proveedor.GetRequiredService<LicenciaViewModel>();
+        var ventana = new LicenciaVentana(viewModel);
+
+        // Al arrancar todavía no hay ninguna ventana abierta
+        if (VentanaActiva() is { IsVisible: true } duenio)
+        {
+            ventana.Owner = duenio;
+            ventana.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        }
+
+        ventana.ShowDialog();
+    }
+
+    // Ruta del archivo elegido, o null si se canceló. filtro: "Descripción (*.ext)|*.ext"
+    public string? ElegirArchivo(string titulo, string filtro)
+    {
+        var dialogo = new Microsoft.Win32.OpenFileDialog { Title = titulo, Filter = filtro, CheckFileExists = true };
+        var elegido = VentanaActiva() is { } duenio ? dialogo.ShowDialog(duenio) : dialogo.ShowDialog();
+        return elegido == true ? dialogo.FileName : null;
+    }
+
+    public void CopiarAlPortapapeles(string texto)
+    {
+        try
+        {
+            Clipboard.SetText(texto);
+        }
+        catch (System.Runtime.InteropServices.ExternalException)
+        {
+            // Otro programa tiene ocupado el portapapeles: el código igual se puede seleccionar y copiar a mano
+        }
+    }
+
     // true si hay alguna ventana abierta además de la principal (la caja)
     public bool HayDialogoAbierto
         => Application.Current.Windows.OfType<Window>().Count(v => v.IsVisible) > 1;

@@ -38,6 +38,7 @@ public partial class CajaViewModel : ObservableObject
     private readonly DialogoServicio _dialogos;
     private readonly Sesion _sesion;
     private readonly SincronizacionServicio _sincronizacion;
+    private readonly LicenciaServicio _licenciaServicio;
     private readonly Carrito _carrito = new();
 
     // La sincronización periódica con la base central (se detiene al cerrar la ventana)
@@ -50,9 +51,12 @@ public partial class CajaViewModel : ObservableObject
                          VentaServicio ventaServicio, TicketServicio ticketServicio, CajaServicio cajaServicio,
                          StockServicio stockServicio, FacturacionServicio facturacionServicio,
                          IImpresoraTicket impresora, CajonDinero cajon, LectorCodigos lector,
-                         DialogoServicio dialogos, Sesion sesion, SincronizacionServicio sincronizacion)
+                         DialogoServicio dialogos, Sesion sesion, SincronizacionServicio sincronizacion,
+                         LicenciaServicio licenciaServicio)
     {
         _sincronizacion = sincronizacion;
+        _licenciaServicio = licenciaServicio;
+        ActualizarAvisoLicencia();
         _productoServicio = productoServicio;
         _usuarioServicio = usuarioServicio;
         _ventaServicio = ventaServicio;
@@ -831,6 +835,32 @@ public partial class CajaViewModel : ObservableObject
     }
 
     private bool PuedeConfigurarHardware() => _sesion.Tiene(Permiso.ConfigurarHardware);
+
+    // ----- Licencia -----
+
+    // "MODO DEMOSTRACIÓN · Ctrl+L" o "La licencia vence en 5 días · Ctrl+L" (vacío si está todo bien)
+    [ObservableProperty]
+    private string avisoLicencia = string.Empty;
+
+    private void ActualizarAvisoLicencia()
+    {
+        var resultado = _licenciaServicio.Verificar();
+        var dias = resultado.DiasParaVencer(DateOnly.FromDateTime(DateTime.Today));
+
+        AvisoLicencia = !resultado.EsValida ? "MODO DEMOSTRACIÓN · Ctrl+L"
+            : dias is <= 15 ? $"La licencia vence en {Math.Max(dias.Value, 0)} días · Ctrl+L"
+            : string.Empty;
+    }
+
+    // Ctrl+L: ver la licencia y el código de instalación. Cualquiera puede verla;
+    // reemplazar una licencia válida necesita el permiso (lo controla LicenciaServicio).
+    [RelayCommand]
+    private void GestionarLicencia()
+    {
+        _dialogos.GestionarLicencia();
+        ActualizarAvisoLicencia();
+        AccionTerminada?.Invoke();
+    }
 
     // Lector por puerto serie: los códigos llegan desde otro hilo y se pasan al hilo de la pantalla
     private void IniciarLector()
