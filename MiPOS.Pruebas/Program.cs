@@ -336,6 +336,29 @@ static async Task ProbarSinConexionAsync(PooledDbContextFactory<MiPOSDbContext> 
         Console.WriteLine($"Subir dos veces la misma venta no la duplica: {(cantidad == 1 && await LeerStockAsync(fabrica, producto.Id) == stockDespues ? "OK" : "ERROR")}");
     }
 
+    // 5. Con facturación activa: la factura viaja pendiente con la venta y se autoriza al subirla
+    var opcionesArca = new OpcionesFacturacion
+    {
+        Modo = ModoFacturacion.Simulada,
+        PuntoVenta = Random.Shared.Next(90000, 99998),
+        CarpetaDatos = Path.Combine(Path.GetTempPath(), "MiPOS-pruebas-facturacion", Guid.NewGuid().ToString("N"))
+    };
+    var facturacionActiva = new FacturacionServicio(fabrica, sesion, opcionesArca,
+        new DatosFiscales { CondicionIva = CondicionIva.ResponsableInscripto },
+        new DatosComercio { Nombre = "Almacén Don Pepe", Cuit = "33-69345023-9" }, new ServicioArcaSimulado(opcionesArca));
+    var ventaFacturada = await new VentaServicio(caida, sesion, opcionesCaja, facturacionActiva, baseLocal).RegistrarAsync(carrito, 1, 10000m);
+    Console.WriteLine($"Venta sin conexión con factura B pendiente: {(ventaFacturada is { RegistradaSinConexion: true, Factura: { Estado: EstadoFactura.Pendiente, Tipo: TipoComprobante.FacturaB } } ? "OK" : "ERROR")}");
+    var ticketPendiente = await new TicketServicio(caida, new DatosComercio(), sesion, cajaCaida, new DatosFiscales(), facturacionActiva, baseLocal)
+        .ArmarPorIdentificadorAsync(ventaFacturada.IdentificadorUnico!.Value, 42, false);
+    Console.WriteLine($"Su ticket dice PENDIENTE DE AUTORIZACIÓN: {(ticketPendiente.Lineas.Any(l => l.Contains("PENDIENTE DE AUTORIZACIÓN")) ? "OK" : "ERROR")}");
+    var tercera = await new SincronizacionServicio(fabrica, baseLocal, opcionesCaja, facturacionActiva).SincronizarAsync();
+    await using (var contexto = await fabrica.CreateDbContextAsync())
+    {
+        var factura = await contexto.Facturas.AsNoTracking().Include(f => f.Venta)
+            .FirstOrDefaultAsync(f => f.Venta!.IdentificadorUnico == ventaFacturada.IdentificadorUnico);
+        Console.WriteLine($"Al subirla, la factura se autoriza con CAE: {(tercera.VentasSubidas == 1 && factura is { Estado: EstadoFactura.Autorizada, Numero: 1 } && factura.Cae?.Length == 14 ? "OK" : $"ERROR ({factura?.Estado} {factura?.Mensaje})")}");
+    }
+
     var resumen = await cajaServicio.CerrarTurnoAsync(0);
     Console.WriteLine($"Con todo subido, la caja cierra: OK (diferencia {resumen.Turno.Diferencia:N2})");
 }

@@ -54,9 +54,9 @@ public partial class ClienteFacturaViewModel : ObservableObject
     {
         get
         {
-            var tipo = CalculadoraFactura.NombreTipo(
+            var tipo = CalculadoraFactura.NombreCorto(
                 _facturacionServicio.TipoPara(DatosReceptor.ConsumidorFinal with { CondicionIva = CondicionSeleccionada.Valor }));
-            return $"Se emitirá: {tipo[0]}{tipo[1..].ToLowerInvariant()}";
+            return $"Se emitirá: {tipo}";
         }
     }
 

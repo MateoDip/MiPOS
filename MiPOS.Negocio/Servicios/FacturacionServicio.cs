@@ -55,9 +55,9 @@ public class FacturacionServicio
     // Ej: "Factura B · Consumidor final" (para mostrar en el cobro)
     public string Describir(DatosReceptor receptor)
     {
-        var tipo = CalculadoraFactura.NombreTipo(TipoPara(receptor));
+        var tipo = CalculadoraFactura.NombreCorto(TipoPara(receptor));
         var nombre = receptor.Nombre is null ? string.Empty : $" · {receptor.Nombre}";
-        return $"{tipo[0]}{tipo[1..].ToLowerInvariant()} · {receptor.DocumentoTexto}{nombre}";
+        return $"{tipo} · {receptor.DocumentoTexto}{nombre}";
     }
 
     /// <summary>

@@ -45,6 +45,15 @@ public static class CalculadoraFactura
         _ => "COMPROBANTE"
     };
 
+    // Para las pantallas: "Factura A" (la letra queda en mayúscula)
+    public static string NombreCorto(TipoComprobante tipo) => tipo switch
+    {
+        TipoComprobante.FacturaA => "Factura A",
+        TipoComprobante.FacturaB => "Factura B",
+        TipoComprobante.FacturaC => "Factura C",
+        _ => "Comprobante"
+    };
+
     /// <summary>
     /// Separa neto e IVA. Las líneas tienen precio final (con IVA). El descuento de la venta
     /// se reparte entre las alícuotas en proporción a lo que suma cada una; la última se lleva

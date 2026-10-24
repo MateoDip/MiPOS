@@ -59,6 +59,10 @@ public class ProductoServicio
 
     private async Task<Producto?> BuscarPorCodigoLocalAsync(string codigo)
     {
+        // Los códigos se guardan en mayúsculas. SQL Server no distingue mayúsculas al comparar, pero SQLite sí:
+        // sin esto, "int0001" escrito a mano se encontraría con conexión y no sin ella.
+        codigo = codigo.ToUpperInvariant();
+
         await using var local = await _baseLocal!.CrearContextoAsync();
         return await local.Productos.AsNoTracking().FirstOrDefaultAsync(p => p.CodigoBarras == codigo && p.Activo);
     }
