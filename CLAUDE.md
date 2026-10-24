@@ -115,12 +115,12 @@ Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de
 
 1. POS básico — **terminada**
 2. Usuarios (Cajero, Administrador, permisos, autorización por contraseña) — **terminada**
-3. Impresión (ticket, impresora térmica) — **terminada** (pendiente la prueba en pantalla junto con el testeo general)
-4. Control de caja — **terminada** (pendiente la prueba en pantalla junto con el testeo general)
-5. Stock y compras — **terminada** (pendiente la prueba en pantalla junto con el testeo general)
+3. Impresión (ticket, impresora térmica) — **terminada** (probada en pantalla en modo Archivo; falta una impresora térmica real)
+4. Control de caja — **terminada** (probada en pantalla)
+5. Stock y compras — **terminada** (probada en pantalla)
 6. Facturación (ARCA) — **terminada** (probada en modo Simulada; falta probar en Homologacion con un certificado real)
 7. Hardware (scanner, impresora, cajón, terminal POS) — **terminada** (probada sin dispositivos reales: falta probar con cajón, lector serie y terminal Point físicos)
-8. Offline y sincronización — **terminada** (probada con una base central inaccesible desde `MiPOS.Pruebas`; falta probar desenchufando la red en una caja real)
+8. Offline y sincronización — **terminada** (probada en pantalla con una base central inaccesible; falta probar desenchufando la red de una caja real)
 9. Licenciamiento — **terminada**
 10. Multidioma (español y chino) — **terminada** (revisada con capturas de pantallas en chino; conviene que un hablante nativo revise el catálogo)
 
