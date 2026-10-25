@@ -8,6 +8,7 @@
   <Project Path="MiPOS.Licencias/MiPOS.Licencias.csproj" />
   <Project Path="MiPOS.Negocio/MiPOS.Negocio.csproj" />
   <Project Path="MiPOS.Pruebas/MiPOS.Pruebas.csproj" />
+  <Project Path="MiPOS.PruebasPantalla/MiPOS.PruebasPantalla.csproj" />
   <Project Path="MiPOS.Seguridad/MiPOS.Seguridad.csproj" />
   <Project Path="MiPOS.WPF/MiPOS.WPF.csproj" />
 </Solution>

@@ -38,6 +38,7 @@ MiPOS es un sistema POS (punto de venta) para comercios minoristas, principalmen
 | `MiPOS.Licencias` | `Licencia`, `ResultadoLicencia`, `CodigoInstalacion`, `ArchivoLicencia` (firma y verificación ECDSA). Guía en `MiPOS.Licencias/LEEME.md` | Nada |
 | `MiPOS.GeneradorLicencias` | Consola de quien vende el sistema: `claves`, `emitir`, `codigo`. No se instala en los comercios | Licencias |
 | `MiPOS.Pruebas` | Consola para pruebas manuales contra la base real (`net10.0-windows`) | Negocio, Datos, DatosLocal, Seguridad, Hardware, Facturacion |
+| `MiPOS.PruebasPantalla` | Prueba automática de las pantallas: abre las ventanas reales, ejecuta los comandos de cada tecla, contesta los diálogos y los MessageBox y comprueba el resultado, en español y chino, con y sin conexión (`Robot.cs`). Solo corre contra LocalDB; crea los usuarios `robot` y `robotadmin` (contraseña `Robot123`) y deja datos de prueba | WPF |
 
 ## Decisiones ya tomadas
 
@@ -89,11 +90,12 @@ Todos los archivos deben guardarse en **UTF-8**. Ya hubo errores de compilación
 dotnet build
 dotnet run --project MiPOS.WPF
 dotnet run --project MiPOS.Pruebas
+dotnet run --project MiPOS.PruebasPantalla   # unos 2 minutos; abre ventanas en la pantalla
 dotnet ef migrations add NombreMigracion --project MiPOS.Datos
 dotnet ef database update --project MiPOS.Datos
 ```
 
-Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de dar el paso por terminado.
+Después de cada cambio, ejecutar `dotnet build` y corregir los errores antes de dar el paso por terminado. Si el cambio toca pantallas o reglas de venta, correr también `MiPOS.Pruebas` y `MiPOS.PruebasPantalla` (las dos tienen que terminar sin ningún "ERROR"); una pantalla o un diálogo nuevo necesita su respuesta en `Robot.cs`.
 
 ## Especificación funcional resumida
 

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Prueba automática de las pantallas (abre las ventanas reales y las usa como un cajero).
+       Solo para desarrollo: crea usuarios de prueba con contraseña conocida en la base. -->
+  <ItemGroup>
+    <ProjectReference Include="..\MiPOS.WPF\MiPOS.WPF.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- La misma configuración que la caja -->
+    <None Include="..\MiPOS.WPF\appsettings.json" Link="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
